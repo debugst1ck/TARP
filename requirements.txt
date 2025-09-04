@@ -1,0 +1,24 @@
+pandas
+polars # DataFrame library but faster and more memory efficient
+
+numpy
+scikit-learn
+
+# For deep learning
+torch --index-url https://download.pytorch.org/whl/cu128
+transformers
+tokenizers
+
+# Progress bar
+tqdm
+
+# For visualization
+matplotlib
+seaborn
+
+# For evaluation
+scipy
+einops
+
+# For biological sequence manipulation
+biopython

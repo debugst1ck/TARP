@@ -1,0 +1,41 @@
+#!/bin/bash -l
+#PBS -N Iron-Sky
+#PBS -l select=1:ncpus=6:ngpus=1:mem=32gb
+#PBS -l walltime=1:00:00
+#PBS -m abe
+#PBS -j oe
+
+# Load necessary modules
+## GCCCore 13.3
+module load GCCcore/13.3.0
+## Python 3.12
+module load Python/3.12.3
+## CUDA 12.8
+module load CUDA/12.8.0
+
+# Load the necessary environment
+cd $HOME/Iron-Sky
+
+if [ ! -d "./.venv" ]; then
+    # Create a virtual environment if it does not exist
+    python -m venv ./.venv
+
+    # Upgrade pip in the virtual environment
+    ./.venv/bin/python -m pip install --upgrade pip
+
+    # Install the required packages
+    ./.venv/bin/python -m pip install -r requirements.txt
+
+    # Uninstall triton as it conflicts with torch
+    ./.venv/bin/python -m pip uninstall -y triton    
+
+    echo "Virtual environment created and packages installed."
+else
+    echo "Virtual environment already exists."
+fi
+
+# Activate the virtual environment
+source ./.venv/bin/activate
+
+# Now run the script
+python app.py
