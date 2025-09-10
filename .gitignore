@@ -1,0 +1,14 @@
+# Python cache files pyc, pyo
+*.py[cod]
+
+# Temporary files
+temp/
+
+# Ignore dataset files
+data/
+
+# Ignore model files
+saved_models/
+
+# Ignore logs
+logs/

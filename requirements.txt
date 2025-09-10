@@ -22,3 +22,6 @@ einops
 
 # For biological sequence manipulation
 biopython
+
+# Safetensors for model saving/loading
+safetensors

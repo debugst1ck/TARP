@@ -20,6 +20,13 @@ class SequenceDataSource:
         raise NotImplementedError
 
     def retrieve(self, index: int) -> dict:
+        """
+        Retrieve a single row from the data source.
+
+        :param int index: The index of the row to retrieve.
+        :return: A dictionary representation of the row.
+        :rtype: dict
+        """
         raise NotImplementedError
 
 
@@ -31,6 +38,7 @@ class TabularSequenceDataSource(SequenceDataSource):
     def __init__(self, source: Path):
         self.source = source
         self.dataframe: Optional[pl.DataFrame] = None
+        self._read_source()
 
     def _read_source(self) -> None:
         if self.source.suffix == ".csv":
@@ -50,7 +58,7 @@ class TabularSequenceDataSource(SequenceDataSource):
 
     def retrieve(self, index: int) -> dict:
         if self.dataframe is not None:
-            return self.dataframe[index].to_dict(as_series=False)
+            return self.dataframe.row(index, named=True)
         return {}
 
 
@@ -64,6 +72,9 @@ class FastaDirectoryDataSource(SequenceDataSource):
         self.metadata = metadata
         self.key_column = key_column
         self.sequence_column = sequence_column
+        
+        self.dataframe: Optional[pl.DataFrame] = None
+        self._read_source()
 
     def _read_source(self) -> None:
         if self.metadata.suffix == ".csv":
