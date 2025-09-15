@@ -29,6 +29,9 @@ class CombinationTechnique(AugmentationTechnique):
 # Deterministic Augmentation Techniques
 
 class ReverseComplement(AugmentationTechnique):
+    def __init__(self, complement_rate: float = 1.0):
+        self.complementation_rate = complement_rate
+    
     def apply(self, sequence: str) -> str:
         """
         Applies the reverse complement augmentation to the input sequence.
@@ -37,6 +40,8 @@ class ReverseComplement(AugmentationTechnique):
         :param str sequence: The input sequence to augment.
         :return str: The augmented sequence.
         """
+        if random.random() > self.complementation_rate:
+            return sequence
         bio_seq = Seq(sequence)
         return str(bio_seq.reverse_complement())
 
@@ -44,7 +49,7 @@ class ReverseComplement(AugmentationTechnique):
 
 class RandomMutation(AugmentationTechnique):
     def __init__(
-        self, mutation_rate: float = 0.1, vocabulary: list[str] = ["A", "C", "G", "T"]
+        self, mutation_rate: float = 0.01, vocabulary: list[str] = ["A", "C", "G", "T"]
     ):
         self.mutation_rate = mutation_rate
         self.vocabulary = vocabulary

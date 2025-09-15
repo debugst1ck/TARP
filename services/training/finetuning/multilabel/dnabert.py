@@ -1,7 +1,8 @@
 from services.loggers.colored import ColoredLogger
-from services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
-from model.finetuning.classification.dnabert2 import SimpleClassifier
+from model.finetuning.classification import ClassificationModel
 from services.evalutation.classification.multilabel import MultilabelMetrics
+
+from services.evalutation.loss.multilabel import AsymmetricLoss
 
 import torch
 from torch import nn, Tensor
@@ -12,13 +13,14 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, LRScheduler, StepLR
 from tqdm import tqdm
 
 from typing import Optional
-from pathlib import Path
+
+from typing import Union
 
 
-class Dnabert2FinetuningClassificationTrainer:
+class FinetuningClassificationTrainer:
     def __init__(
         self,
-        model: SimpleClassifier,
+        model: ClassificationModel,
         train_dataset: Dataset,
         valid_dataset: Dataset,
         optimizer: Optimizer,
@@ -28,6 +30,8 @@ class Dnabert2FinetuningClassificationTrainer:
         epochs: int = 10,
         max_grad_norm: float = 1.0,
         num_workers: int = 0,
+        class_weights: Optional[Tensor] = None,
+        criterion: Optional[nn.Module] = None,
     ):
         self.model = model
 
@@ -38,7 +42,16 @@ class Dnabert2FinetuningClassificationTrainer:
         self.epochs = epochs
         self.max_grad_norm = max_grad_norm
 
-        self.criterion = nn.BCEWithLogitsLoss()
+        if criterion is not None:
+            self.criterion = criterion
+        else:
+            if class_weights is not None:
+                # self.criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights.to(device))
+                self.criterion = AsymmetricLoss(
+                    gamma_neg=2, gamma_pos=0, class_weights=class_weights.to(device)
+                )
+            else:
+                self.criterion = nn.BCEWithLogitsLoss()
 
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
@@ -59,11 +72,13 @@ class Dnabert2FinetuningClassificationTrainer:
         )
         self.model.to(self.device)
 
+        self.history: list[dict[str, float]] = [{} for _ in range(self.epochs)]
+
     def _train_epoch(self, epoch: int) -> float:
         self.model.train()
 
         total_loss = 0.0
-        loop = tqdm(
+        loop: Union[Dataset[dict[str, Tensor]]] = tqdm(
             self.train_dataloader,
             desc=f"Training {epoch+1}/{self.epochs}",
             unit="batch",
@@ -121,7 +136,7 @@ class Dnabert2FinetuningClassificationTrainer:
                 loop.set_postfix(loss=loss.item())
 
         average_validation_loss = total_loss / len(self.valid_dataloader)
-        results = metrics.compute(all_labels, all_logits)
+        results = metrics.compute(all_logits, all_labels)
         return average_validation_loss, results
 
     def fit(self):
@@ -136,11 +151,25 @@ class Dnabert2FinetuningClassificationTrainer:
             ColoredLogger.info(f"Training loss: {train_loss:.4f}")
             validation_loss, metrics = self._validate_epoch(epoch)
             ColoredLogger.info(f"Validation loss: {validation_loss:.4f}")
+            
+            # Learning rate
+            if self.scheduler is not None:
+                if isinstance(self.scheduler, ReduceLROnPlateau):
+                    lr = self.scheduler.optimizer.param_groups[0]["lr"]
+                else:
+                    lr = self.scheduler.get_last_lr()[0]
+                ColoredLogger.info(f"Learning rate: {lr:.6f}")
 
             for metric_name, metric_value in metrics.items():
                 if metric_value is None:
                     continue
                 ColoredLogger.debug(f"{metric_name.capitalize()}: {metric_value:.4f}")
+
+            self.history[epoch] = {
+                "train_loss": train_loss,
+                "validation_loss": validation_loss,
+                **{k: v for k, v in metrics.items() if v is not None},
+            }
 
             if isinstance(self.scheduler, ReduceLROnPlateau):
                 self.scheduler.step(

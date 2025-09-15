@@ -5,7 +5,7 @@ class ColoredFormatter(logging.Formatter):
     COLORS = {
         "DEBUG": "\033[96m",
         "INFO": "\033[92m",
-        "WARNING": "\033[93m",
+        "WARN": "\033[93m",
         "ERROR": "\033[91m",
         "CRITICAL": "\033[95m",
     }
@@ -30,11 +30,13 @@ class ColoredLogger:
         if cls._logger is None:
             logger = logging.getLogger("ColoredLogger")
             logger.setLevel(logging.DEBUG)
+            
+            logging.addLevelName(logging.WARNING, "WARN")
 
             if not logger.handlers:  # only add handler once
                 handler = logging.StreamHandler()
                 formatter = ColoredFormatter(
-                    "[%(levelname)s] %(asctime)s - %(message)s"
+                    "[%(levelname)s]\t%(asctime)s - %(message)s"
                 )
                 handler.setFormatter(formatter)
                 logger.addHandler(handler)

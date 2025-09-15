@@ -13,8 +13,10 @@ tokenizers
 tqdm
 
 # For visualization
-matplotlib
-seaborn
+plotly
+
+# polars needs pyarrow for pandas compatibility
+pyarrow
 
 # For evaluation
 scipy

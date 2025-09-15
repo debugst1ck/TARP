@@ -16,3 +16,7 @@ class Dnabert2Tokenizer(Tokenizer):
     @property
     def pad_token_id(self) -> int:
         return 3
+    
+    @property
+    def vocab_size(self) -> int:
+        return self.tokenizer.vocab_size

@@ -1,36 +1,55 @@
 from torch import nn, Tensor
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from model.finetuning.classification import ClassificationModel
 
 
-class LSTMClassifier(nn.Module):
+class LstmClassificationModel(ClassificationModel):
     def __init__(
         self,
-        input_size: int,
-        hidden_size: int,
+        vocabulary_size: int,
         number_of_classes: int,
+        embedding_dimension: int,
+        hidden_dimension: int = 128,
+        number_of_layers: int = 2,
+        bidirectional: bool = True,
+        dropout: float = 0.3,
+        padding_id: int = 0,
     ):
-        super(LSTMClassifier, self).__init__()
-        self.lstm = nn.LSTM(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            batch_first=True,
+        super().__init__(
+            number_of_classes, hidden_dimension * (2 if bidirectional else 1)
         )
-        self.fc = nn.Linear(hidden_size, number_of_classes)
+        self.embedding = nn.Embedding(
+            num_embeddings=vocabulary_size,
+            embedding_dim=embedding_dimension,
+            padding_idx=padding_id,
+        )
+        self.lstm = nn.LSTM(
+            input_size=embedding_dimension,
+            hidden_size=hidden_dimension,
+            num_layers=number_of_layers,
+            bidirectional=bidirectional,
+            batch_first=True,
+            dropout=dropout if number_of_layers > 1 else 0.0,
+        )
 
-    def forward(self, sequence: Tensor, attention_mask: Tensor = None) -> Tensor:
-        # sequence shape: (batch_size, seq_length, input_size)
-        # Attention mask is used to ignore padding token
+    def encode(
+        self, sequence: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        embedded = self.embedding(sequence)
+
         if attention_mask is not None:
-            lengths = attention_mask.sum(dim=1).cpu() # (batch_size,)
-            packed_sequence = pack_padded_sequence(
-                sequence, lengths, batch_first=True, enforce_sorted=False
+            lengths = attention_mask.sum(dim=1).cpu()
+            packed = pack_padded_sequence(
+                embedded, lengths, batch_first=True, enforce_sorted=False
             )
-            packed_output, (hn, cn) = self.lstm(packed_sequence)
+            packed_output, (hidden, cell) = self.lstm(packed)
             output, _ = pad_packed_sequence(packed_output, batch_first=True)
         else:
-            output, (hn, cn) = self.lstm(sequence)
-            
-        # Use the last hidden state for classification
-        logits = self.fc(hn[-1])
-        return logits
+            output, (hidden, cell) = self.lstm(embedded)
+
+        if self.lstm.bidirectional:
+            pooled = torch.cat((hidden[-2], hidden[-1]), dim=1)
+        else:
+            pooled = hidden[-1]
+        return pooled

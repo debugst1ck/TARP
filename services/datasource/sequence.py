@@ -67,12 +67,18 @@ class FastaDirectoryDataSource(SequenceDataSource):
     Reads from a directory of FASTA files. Metadata is stored as a Tabular source.
     """
 
-    def __init__(self, directory: Path, metadata: Path, key_column: str, sequence_column: str = "sequence"):
+    def __init__(
+        self,
+        directory: Path,
+        metadata: Path,
+        key_column: str,
+        sequence_column: str = "sequence",
+    ):
         self.directory = directory
         self.metadata = metadata
         self.key_column = key_column
         self.sequence_column = sequence_column
-        
+
         self.dataframe: Optional[pl.DataFrame] = None
         self._read_source()
 
@@ -109,3 +115,39 @@ class FastaDirectoryDataSource(SequenceDataSource):
                 str(record.seq) for record in SeqIO.parse(handle, "fasta")
             )
         return row
+
+
+class CombinationDataSource(SequenceDataSource):
+    """
+    Combines multiple data sources into one.
+    """
+
+    def __init__(self, sources: list[SequenceDataSource]):
+        self.sources = sources
+
+    @property
+    def height(self) -> int:
+        return sum(source.height for source in self.sources)
+
+    def retrieve(self, index: int) -> dict:
+        for source in self.sources:
+            if index < source.height:
+                return source.retrieve(index)
+            index -= source.height
+        raise IndexError("Index out of range for combined data sources.")
+
+
+class InMemorySequenceDataSource(SequenceDataSource):
+    """
+    Stores sequences in memory for fast access.
+    """
+
+    def __init__(self, data: pl.DataFrame):
+        self.dataframe = data
+
+    @property
+    def height(self) -> int:
+        return self.dataframe.height
+
+    def retrieve(self, index: int) -> dict:
+        return self.dataframe.row(index, named=True)

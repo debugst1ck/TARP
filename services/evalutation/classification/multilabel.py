@@ -4,6 +4,8 @@ import torch
 import sklearn.metrics
 from typing import Union
 
+from services.loggers.colored import ColoredLogger
+
 
 class MultilabelMetrics:
     """
@@ -32,38 +34,62 @@ class MultilabelMetrics:
         if not self.logits:
             return logits
         probs = self._predict_probability(logits)
-        return (probs > self.threshold).float()
+        return (probs > self.threshold).int()
 
     # --- individual metric implementations ---
     def _precision(self, logits: Tensor, targets: Tensor) -> float:
         preds = self._predict(logits)
         return sklearn.metrics.precision_score(
-            targets.cpu(), preds.cpu(), average="micro"
+            targets.cpu().numpy(), preds.cpu().numpy(), average="micro", zero_division=0
         )
 
     def _recall(self, logits: Tensor, targets: Tensor) -> float:
         preds = self._predict(logits)
-        return sklearn.metrics.recall_score(targets.cpu(), preds.cpu(), average="micro")
+        return sklearn.metrics.recall_score(
+            targets.cpu().numpy(), preds.cpu().numpy(), average="micro", zero_division=0
+        )
 
     def _f1(self, logits: Tensor, targets: Tensor) -> float:
         preds = self._predict(logits)
-        return sklearn.metrics.f1_score(targets.cpu(), preds.cpu(), average="micro")
+        return sklearn.metrics.f1_score(
+            targets.cpu().numpy(), preds.cpu().numpy(), average="micro", zero_division=0
+        )
 
     def _subset_accuracy(self, logits: Tensor, targets: Tensor) -> float:
         preds = self._predict(logits)
-        return sklearn.metrics.accuracy_score(targets.cpu(), preds.cpu())
+        return sklearn.metrics.accuracy_score(
+            targets.cpu().numpy(), preds.cpu().numpy()
+        )
 
     def _roc_auc(self, logits: Tensor, targets: Tensor) -> Optional[float]:
         if not self.logits:
-            raise ValueError("ROC AUC requires logits, but logits=False was set.")
-        probs = self._predict_probability(logits)
-        try:
-            return sklearn.metrics.roc_auc_score(
-                targets.cpu(), probs.cpu(), average="macro", multi_class="ovr"
+            ColoredLogger.warning(
+                "ROC AUC metric expects logits, but got probabilities."
             )
-        except ValueError:
-            # Handles edge case: ROC AUC cannot be computed if only one class is present
-            return None
+            return float("nan")
+
+        probs = self._predict_probability(logits).cpu().numpy()
+        y_true = targets.cpu().numpy()
+
+        # Find valid classes (those with at least one positive sample)
+        valid_classes = [
+            i for i in range(y_true.shape[1]) if len(set(y_true[:, i])) > 1
+        ]
+
+        # If no valid classes, return NaN
+        if not valid_classes:
+            ColoredLogger.warning("No valid classes for ROC AUC computation.")
+            return float("nan")
+
+        if len(valid_classes) < y_true.shape[1]:
+            skipped = y_true.shape[1] - len(valid_classes)
+            ColoredLogger.warning(
+                f"Skipping {skipped} invalid classes (all-zeros or all-ones) for ROC AUC."
+            )
+            
+        return sklearn.metrics.roc_auc_score(
+            y_true[:, valid_classes], probs[:, valid_classes], average="macro"
+        )
 
     # --- public interface ---
     def compute(
