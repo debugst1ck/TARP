@@ -29,6 +29,7 @@ class MultiLabelClassificationDataset(SequenceDataset):
     def __getitem__(self, index: int) -> dict[str, Tensor]:
         item = super().__getitem__(index)
         row = self.data_source.retrieve(index)
+        # Extract labels for multi-source multi-label classification
         labels = [row.get(col, 0) for col in self.label_columns]
         item["labels"] = torch.tensor(labels, dtype=torch.float)
         return item

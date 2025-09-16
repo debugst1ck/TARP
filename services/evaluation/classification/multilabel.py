@@ -12,7 +12,7 @@ class MultilabelMetrics:
     Computes multiple metrics for multilabel classification in one call.
     """
 
-    def __init__(self, threshold: float = 0.5, logits: bool = True):
+    def __init__(self, threshold: Union[float, Tensor] = 0.5, logits: bool = True):
         self.threshold = threshold
         self.logits = logits
 
@@ -23,6 +23,7 @@ class MultilabelMetrics:
             "f1": self._f1,
             "subset_accuracy": self._subset_accuracy,
             "roc_auc": self._roc_auc,
+            "hamming_loss": self._hamming_loss,
         }
 
     def _predict_probability(self, logits: Tensor) -> Tensor:
@@ -34,8 +35,19 @@ class MultilabelMetrics:
         if not self.logits:
             return logits
         probs = self._predict_probability(logits)
-        return (probs > self.threshold).int()
+        
+        if isinstance(self.threshold, Tensor):
+            if self.threshold.ndim == 1:  # shape [num_classes]
+                threshold_tensor = self.threshold.to(probs.device).unsqueeze(0)  # [1, num_classes]
+            else:
+                raise ValueError(
+                    f"Threshold tensor must be 1D [num_classes], got shape {self.threshold.shape}"
+                )
+        else:
+            threshold_tensor = self.threshold
 
+        return (probs > threshold_tensor).int()
+    
     # --- individual metric implementations ---
     def _precision(self, logits: Tensor, targets: Tensor) -> float:
         preds = self._predict(logits)
@@ -90,7 +102,13 @@ class MultilabelMetrics:
         return sklearn.metrics.roc_auc_score(
             y_true[:, valid_classes], probs[:, valid_classes], average="macro"
         )
-
+    
+    def _hamming_loss(self, logits: Tensor, targets: Tensor) -> float:
+        preds = self._predict(logits)
+        return sklearn.metrics.hamming_loss(
+            targets.cpu().numpy(), preds.cpu().numpy()
+        )
+    
     # --- public interface ---
     def compute(
         self, logits: Union[Tensor, list[Tensor]], targets: Union[Tensor, list[Tensor]]

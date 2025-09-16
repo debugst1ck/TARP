@@ -1,8 +1,8 @@
 from services.loggers.colored import ColoredLogger
 from model.finetuning.classification import ClassificationModel
-from services.evalutation.classification.multilabel import MultilabelMetrics
+from services.evaluation.classification.multilabel import MultilabelMetrics
 
-from services.evalutation.loss.multilabel import AsymmetricLoss
+from services.evaluation.losses.multilabel import AsymmetricFocalLoss
 
 import torch
 from torch import nn, Tensor
@@ -17,7 +17,7 @@ from typing import Optional
 from typing import Union
 
 
-class FinetuningClassificationTrainer:
+class MultiLabelClassificationTrainer:
     def __init__(
         self,
         model: ClassificationModel,
@@ -47,7 +47,7 @@ class FinetuningClassificationTrainer:
         else:
             if class_weights is not None:
                 # self.criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights.to(device))
-                self.criterion = AsymmetricLoss(
+                self.criterion = AsymmetricFocalLoss(
                     gamma_neg=2, gamma_pos=0, class_weights=class_weights.to(device)
                 )
             else:
@@ -78,7 +78,7 @@ class FinetuningClassificationTrainer:
         self.model.train()
 
         total_loss = 0.0
-        loop: Union[Dataset[dict[str, Tensor]]] = tqdm(
+        loop = tqdm(
             self.train_dataloader,
             desc=f"Training {epoch+1}/{self.epochs}",
             unit="batch",
@@ -113,7 +113,7 @@ class FinetuningClassificationTrainer:
         total_loss = 0.0
         all_labels, all_logits = [], []
 
-        metrics = MultilabelMetrics()
+        metrics = MultilabelMetrics(threshold=0.5)
 
         loop = tqdm(
             self.valid_dataloader,
