@@ -113,7 +113,7 @@ class MultiLabelClassificationTrainer:
         total_loss = 0.0
         all_labels, all_logits = [], []
 
-        metrics = MultilabelMetrics(threshold=0.5)
+        metrics = MultilabelMetrics(threshold=0.6)
 
         loop = tqdm(
             self.valid_dataloader,
@@ -171,13 +171,11 @@ class MultiLabelClassificationTrainer:
                 **{k: v for k, v in metrics.items() if v is not None},
             }
 
-            if isinstance(self.scheduler, ReduceLROnPlateau):
-                self.scheduler.step(
-                    validation_loss
-                )  # or metrics["f1"] if monitoring f1
-
-            elif self.scheduler is not None:
-                self.scheduler.step()
+            if self.scheduler is not None:
+                if isinstance(self.scheduler, ReduceLROnPlateau):
+                    self.scheduler.step(validation_loss)
+                else:
+                    self.scheduler.step()
 
             if validation_loss < best_validation_loss:
                 best_validation_loss = validation_loss

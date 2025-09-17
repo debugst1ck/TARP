@@ -1,14 +1,13 @@
 import torch
-from torch import nn, Tensor
-
 from pathlib import Path
 
-from torch.optim import Optimizer, AdamW
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
 from services.datasource.sequence import TabularSequenceDataSource
 from services.datasets.finetuning.classification import MultiLabelClassificationDataset
+from services.datasets.finetuning.triplet import MultiLabelTripletDataset
 from services.training.classification.multilabel import MultiLabelClassificationTrainer
 
 from services.loggers.colored import ColoredLogger
@@ -17,8 +16,10 @@ from services.evaluation.losses.multilabel import AsymmetricFocalLoss
 
 import polars as pl
 
-from model.finetuning.classification.dnabert2 import FrozenDnabert2ClassificationModel
-from model.finetuning.classification.lstm import LstmClassificationModel
+from model.backbone.untrained.lstm import LstmEncoder
+
+from model.backbone.pretrained.dnabert2 import Dnabert2Encoder, FrozenDnabert2Encoder
+from model.finetuning.classification import ClassificationModel
 
 from services.preprocessing.augumentation import (
     CombinationTechnique,
@@ -72,7 +73,7 @@ def app() -> None:
 
     alphas = torch.tensor(alphas, dtype=torch.float)
     pos_weights = torch.tensor(pos_weights, dtype=torch.float)
-
+    
     # Delete df to save memory
     del df
 
@@ -84,7 +85,7 @@ def app() -> None:
         Dnabert2Tokenizer(),
         sequence_column="sequence",
         label_columns=label_columns,
-        maximum_sequence_length=768,
+        maximum_sequence_length=512,
         augumentation=CombinationTechnique(
             [
                 RandomMutation(),
@@ -94,36 +95,42 @@ def app() -> None:
         ),
     )
 
+    # triplet_dataset = MultiLabelTripletDataset(base_dataset=dataset)
+
     # Make a subset of the dataset for quick testing
     valid_dataset = Subset(dataset, range(768))
     train_dataset = Subset(dataset, range(768, len(dataset)))
 
-    model = LstmClassificationModel(
-        vocabulary_size=dataset.tokenizer.vocab_size,
+    model = ClassificationModel(
+        LstmEncoder(
+            vocabulary_size=dataset.tokenizer.vocab_size,
+            embedding_dimension=768,
+            hidden_dimension=512,
+            padding_id=dataset.tokenizer.pad_token_id,
+            number_of_layers=3,
+            dropout=0.2,
+            bidirectional=True,
+        ),
         number_of_classes=len(label_columns),
-        embedding_dimension=768,
-        hidden_dimension=512,
-        padding_id=dataset.tokenizer.pad_token_id,
-        number_of_layers=3,
-        dropout=0.2,
-        bidirectional=True,
     )
 
-    # model = FrozenDnabert2ClassificationModel(
+    # model = ClassificationModel(
+    #     FrozenDnabert2Encoder(hidden_dimension=768),
     #     number_of_classes=len(label_columns),
-    #     hidden_dimension=768,
     # )
+    
+    ColoredLogger.info(f"Training {model.encoder.__class__.__name__} model")
+    
+    torch.compile(model, mode="reduce-overhead")
 
-    torch.compile(model)
-
-    optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=1e-2)
+    optimizer = AdamW(model.parameters(), lr=0.001, weight_decay=1e-2)
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         ColoredLogger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
         device = torch.device("cuda")
     else:
-        ColoredLogger.warning("Using CPU")
+        ColoredLogger.warning("Using CPU for training, this may be slow")
         device = torch.device("cpu")
 
     trainer = MultiLabelClassificationTrainer(
@@ -137,7 +144,9 @@ def app() -> None:
         num_workers=4,
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
-        criterion=AsymmetricFocalLoss(gamma_pos=0, gamma_neg=2, class_weights=pos_weights)
+        criterion=AsymmetricFocalLoss(
+            gamma_pos=2, gamma_neg=2, class_weights=pos_weights.to(device)
+        ),
     )
 
     trainer.fit()
@@ -146,10 +155,8 @@ def app() -> None:
     # Check if directory exists
     Path("temp/models").mkdir(parents=True, exist_ok=True)
     Path("temp/history").mkdir(parents=True, exist_ok=True)
-    
-    torch.save(
-        model.state_dict(), f"temp/models/{model.__class__.__name__}.pt"
-    )
+
+    torch.save(model.state_dict(), f"temp/models/{model.__class__.__name__}.pt")
 
     ColoredLogger.info("Training complete")
 
@@ -158,6 +165,7 @@ def app() -> None:
     history_df = pl.DataFrame(history)
     fig = px.line(history_df, y=history_df.columns, title="Training History")
     fig.write_html(f"temp/history/{model.__class__.__name__}.html")
+
 
 if __name__ == "__main__":
     app()

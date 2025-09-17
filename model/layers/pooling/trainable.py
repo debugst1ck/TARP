@@ -103,7 +103,7 @@ class QueryAttentionPooling(nn.Module):
         attention_weights = attention_weights.unsqueeze(-1)  # (B, L, 1)
 
         # Weighted sum
-        pooled_output = torch.sum(hidden_states * attention_weights, dim=1)
+        pooled_output = torch.sum(hidden_states * attention_weights, dim=1) # (B, H)
 
         if return_attention:
             return pooled_output, attention_weights

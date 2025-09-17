@@ -1,24 +1,17 @@
-# Using DNABERT for classification
-from torch import nn, Tensor
+from torch import Tensor
 import torch
+from torch import nn
 from transformers import AutoModel
 from model.layers.pooling.trainable import QueryAttentionPooling
 
-from model.finetuning.classification import ClassificationModel
+from model.backbone import Encoder, FrozenModel
 
+from typing import Optional
 
-class Dnabert2ClassificationModel(ClassificationModel):
-    """
-    A simple classifier using DNABERT for sequence classification.
-    """
-
-    def __init__(
-        self,
-        number_of_classes: int,
-        hidden_dimension: int,
-        name: str = "zhihan1996/DNABERT-2-117M",
-    ):
-        super().__init__(number_of_classes, hidden_dimension)
+class Dnabert2Encoder(Encoder):
+    def __init__(self, hidden_dimension: int, name: str = "zhihan1996/DNABERT-2-117M"):
+        super().__init__()
+        self.hidden_dimension = hidden_dimension
         self.encoder = AutoModel.from_pretrained(name, trust_remote_code=True)
         self.pooling = QueryAttentionPooling(hidden_dimension)
 
@@ -35,31 +28,40 @@ class Dnabert2ClassificationModel(ClassificationModel):
         pooled_representation = self.pooling(outputs)
         return pooled_representation
 
+    @property
+    def encoding_size(self) -> int:
+        return self.hidden_dimension
 
-# Frozen DNABERT2 classifier
-class FrozenDnabert2ClassificationModel(ClassificationModel):
-    """
-    A simple classifier using a frozen DNABERT for sequence classification.
-    """
 
-    def __init__(
-        self,
-        number_of_classes: int,
-        hidden_dimension: int,
-        name: str = "zhihan1996/DNABERT-2-117M",
-    ):
-        super().__init__(number_of_classes, hidden_dimension)
-        self.encoder = AutoModel.from_pretrained(name, trust_remote_code=True)
+class FrozenDnabert2Encoder(Encoder, FrozenModel):
+    def __init__(self, hidden_dimension: int, name: str = "zhihan1996/DNABERT-2-117M"):
+        super().__init__()
+        self.hidden_dimension = hidden_dimension
+        self.encoder: nn.Module = AutoModel.from_pretrained(
+            name, trust_remote_code=True
+        )
         self.pooling = QueryAttentionPooling(hidden_dimension)
 
         # Freeze the encoder parameters
+        self.freeze()
+
+    @property
+    def encoding_size(self) -> int:
+        return self.hidden_dimension
+
+    def freeze(self):
         for param in self.encoder.parameters():
             param.requires_grad = False
         self.encoder.eval()
 
-    def encode(self, sequence: Tensor, attention_mask: Tensor) -> Tensor:
+    def unfreeze(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = True
+        self.encoder.train()
+        
+    def encode(self, sequence: Tensor, attention_mask: Optional[Tensor] = None) -> Tensor:
         """
-        Encode the input sequence using DNABERT and apply attention pooling.
+        Encode the input sequence using a frozen DNABERT and apply attention pooling.
 
         :param Tensor sequence: The input sequence for the encoder.
         :param Tensor attention_mask: Optional attention mask for padding tokens. (0 = pad)
