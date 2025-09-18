@@ -4,6 +4,7 @@ from typing import Optional
 
 from model.backbone import Encoder
 
+
 class TripletMetricModel(nn.Module):
     def __init__(self, encoder: Encoder):
         super().__init__()
@@ -32,5 +33,4 @@ class TripletMetricModel(nn.Module):
         positive_representation = self.encoder.encode(positive, positive_mask)
         negative_representation = self.encoder.encode(negative, negative_mask)
 
-        return anchor_representation, positive_representation, negative_representation        
-        
+        return anchor_representation, positive_representation, negative_representation

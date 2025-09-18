@@ -10,6 +10,9 @@ from services.datasets.finetuning.classification import MultiLabelClassification
 from services.datasets.finetuning.triplet import MultiLabelTripletDataset
 from services.training.classification.multilabel import MultiLabelClassificationTrainer
 
+from services.training.metric.triplet import TripletMetricTrainer
+from model.finetuning.metric.triplet import TripletMetricModel
+
 from services.loggers.colored import ColoredLogger
 
 from services.evaluation.losses.multilabel import AsymmetricFocalLoss
@@ -73,7 +76,7 @@ def app() -> None:
 
     alphas = torch.tensor(alphas, dtype=torch.float)
     pos_weights = torch.tensor(pos_weights, dtype=torch.float)
-    
+
     # Delete df to save memory
     del df
 
@@ -95,35 +98,46 @@ def app() -> None:
         ),
     )
 
-    # triplet_dataset = MultiLabelTripletDataset(base_dataset=dataset)
+    triplet_dataset = MultiLabelTripletDataset(base_dataset=dataset)
 
     # Make a subset of the dataset for quick testing
     valid_dataset = Subset(dataset, range(768))
     train_dataset = Subset(dataset, range(768, len(dataset)))
 
-    model = ClassificationModel(
-        LstmEncoder(
-            vocabulary_size=dataset.tokenizer.vocab_size,
-            embedding_dimension=768,
-            hidden_dimension=512,
-            padding_id=dataset.tokenizer.pad_token_id,
-            number_of_layers=3,
-            dropout=0.2,
-            bidirectional=True,
-        ),
+    encoder = LstmEncoder(
+        vocabulary_size=dataset.tokenizer.vocab_size,
+        embedding_dimension=768,
+        hidden_dimension=512,
+        padding_id=dataset.tokenizer.pad_token_id,
+        number_of_layers=3,
+        dropout=0.2,
+        bidirectional=True,
+    )
+
+    classification_model = ClassificationModel(
+        encoder=encoder,
         number_of_classes=len(label_columns),
     )
+
+    triplet_model = TripletMetricModel(
+        encoder=encoder,
+    )
+
+    triplet_train_dataset = Subset(triplet_dataset, range(768, len(triplet_dataset)))
+    triplet_valid_dataset = Subset(triplet_dataset, range(768))
 
     # model = ClassificationModel(
     #     FrozenDnabert2Encoder(hidden_dimension=768),
     #     number_of_classes=len(label_columns),
     # )
-    
-    ColoredLogger.info(f"Training {model.encoder.__class__.__name__} model")
-    
-    torch.compile(model, mode="reduce-overhead")
 
-    optimizer = AdamW(model.parameters(), lr=0.001, weight_decay=1e-2)
+    ColoredLogger.info(
+        f"Training {classification_model.encoder.__class__.__name__} model"
+    )
+
+    # Use torch compile to optimize the model
+    torch.compile(classification_model, mode="reduce-overhead")
+    torch.compile(triplet_model, mode="reduce-overhead")
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -133,19 +147,38 @@ def app() -> None:
         ColoredLogger.warning("Using CPU for training, this may be slow")
         device = torch.device("cpu")
 
+    optimizer_classification = AdamW(
+        classification_model.parameters(), lr=0.001, weight_decay=1e-2
+    )
+    optimizer_triplet = AdamW(triplet_model.parameters(), lr=0.001, weight_decay=1e-2)
+
+    metric_learning_trainer = TripletMetricTrainer(
+        model=triplet_model,
+        train_dataset=triplet_train_dataset,
+        valid_dataset=triplet_valid_dataset,
+        optimizer=optimizer_triplet,
+        scheduler=ReduceLROnPlateau(optimizer_triplet, mode="min", patience=3),
+        device=device,
+        epochs=1,
+        num_workers=2,
+    )
+    metric_learning_trainer.fit()
+
+    classification_model.encoder.load_state_dict(triplet_model.encoder.state_dict())
+
     trainer = MultiLabelClassificationTrainer(
-        model=model,
+        model=classification_model,
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,
-        optimizer=optimizer,
-        scheduler=ReduceLROnPlateau(optimizer, mode="min", patience=3),
+        optimizer=optimizer_classification,
+        scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
         device=device,
-        epochs=10,
+        epochs=9,
         num_workers=4,
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
         criterion=AsymmetricFocalLoss(
-            gamma_pos=2, gamma_neg=2, class_weights=pos_weights.to(device)
+            gamma_pos=2, gamma_neg=2, # class_weights=pos_weights.to(device)
         ),
     )
 
@@ -156,7 +189,10 @@ def app() -> None:
     Path("temp/models").mkdir(parents=True, exist_ok=True)
     Path("temp/history").mkdir(parents=True, exist_ok=True)
 
-    torch.save(model.state_dict(), f"temp/models/{model.__class__.__name__}.pt")
+    torch.save(
+        classification_model.state_dict(),
+        f"temp/models/{classification_model.encoder.__class__.__name__}.pt",
+    )
 
     ColoredLogger.info("Training complete")
 
@@ -164,7 +200,7 @@ def app() -> None:
     history = trainer.history  # List of dicts
     history_df = pl.DataFrame(history)
     fig = px.line(history_df, y=history_df.columns, title="Training History")
-    fig.write_html(f"temp/history/{model.__class__.__name__}.html")
+    fig.write_html(f"temp/history/{classification_model.encoder.__class__.__name__}.html")
 
 
 if __name__ == "__main__":

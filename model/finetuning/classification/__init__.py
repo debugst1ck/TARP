@@ -3,6 +3,7 @@ from torch import nn
 
 from model.backbone import Encoder
 
+
 class ClassificationModel(nn.Module):
     """
     A simple classification model.
@@ -12,7 +13,6 @@ class ClassificationModel(nn.Module):
         super().__init__()
         self.number_of_classes = number_of_classes
         self.encoder = encoder
-
         self.classifier = nn.Linear(self.encoder.encoding_size, number_of_classes)
 
     def forward(

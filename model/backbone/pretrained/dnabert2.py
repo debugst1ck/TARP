@@ -8,6 +8,7 @@ from model.backbone import Encoder, FrozenModel
 
 from typing import Optional
 
+
 class Dnabert2Encoder(Encoder):
     def __init__(self, hidden_dimension: int, name: str = "zhihan1996/DNABERT-2-117M"):
         super().__init__()
@@ -58,8 +59,10 @@ class FrozenDnabert2Encoder(Encoder, FrozenModel):
         for param in self.encoder.parameters():
             param.requires_grad = True
         self.encoder.train()
-        
-    def encode(self, sequence: Tensor, attention_mask: Optional[Tensor] = None) -> Tensor:
+
+    def encode(
+        self, sequence: Tensor, attention_mask: Optional[Tensor] = None
+    ) -> Tensor:
         """
         Encode the input sequence using a frozen DNABERT and apply attention pooling.
 
