@@ -7,7 +7,7 @@ import torch
 from services.preprocessing.augumentation import NoAugmentation, AugmentationTechnique
 
 
-class MultiLabelClassificationDataset(SequenceDataset):
+class ClassificationDataset(SequenceDataset):
     def __init__(
         self,
         data_source: SequenceDataSource,

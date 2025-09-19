@@ -6,8 +6,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
 from services.datasource.sequence import TabularSequenceDataSource
-from services.datasets.finetuning.classification import MultiLabelClassificationDataset
-from services.datasets.finetuning.triplet import MultiLabelTripletDataset
+from services.datasets.classification.multilabel import MultiLabelClassificationDataset
+from services.datasets.metric.triplet import MultiLabelTripletDataset
 from services.training.classification.multilabel import MultiLabelClassificationTrainer
 
 from services.training.metric.triplet import TripletMetricTrainer
@@ -178,7 +178,7 @@ def app() -> None:
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
         criterion=AsymmetricFocalLoss(
-            gamma_pos=2, gamma_neg=2, # class_weights=pos_weights.to(device)
+            gamma_pos=2, gamma_neg=2, class_weights=pos_weights.to(device)
         ),
     )
 

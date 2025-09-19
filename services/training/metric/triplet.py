@@ -10,8 +10,9 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, LRScheduler
 from tqdm import tqdm
 from typing import Optional
 
+from services.training import Trainer
 
-class TripletMetricTrainer:
+class TripletMetricTrainer(Trainer):
     def __init__(
         self,
         model: TripletMetricModel,

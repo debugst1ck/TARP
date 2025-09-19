@@ -2,7 +2,7 @@ import torch
 import random
 from torch import Tensor
 from torch.utils.data import Dataset
-from services.datasets.finetuning.classification import MultiLabelClassificationDataset
+from services.datasets.classification.multilabel import MultiLabelClassificationDataset
 from services.loggers.colored import ColoredLogger
 
 

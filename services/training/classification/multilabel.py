@@ -16,8 +16,9 @@ from typing import Optional
 
 from typing import Union
 
+from services.training import Trainer
 
-class MultiLabelClassificationTrainer:
+class MultiLabelClassificationTrainer(Trainer):
     def __init__(
         self,
         model: ClassificationModel,

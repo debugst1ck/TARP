@@ -12,3 +12,9 @@ saved_models/
 
 # Ignore logs
 logs/
+
+# Ignore virtual environment
+.venv/
+
+# Ignore IDE specific files
+.vscode/
