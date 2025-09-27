@@ -4,8 +4,10 @@ from Bio.Seq import Seq
 from array import array
 import sys
 from typing import Optional
+import itertools
 
 # Base Augmentation Technique
+
 
 class AugmentationTechnique:
     def apply(self, sequence: str) -> str:
@@ -17,6 +19,10 @@ class AugmentationTechnique:
         """
         return NotImplementedError
 
+
+# Stochastic Augmentation Techniques
+
+
 class CombinationTechnique(AugmentationTechnique):
     def __init__(self, techniques: list[AugmentationTechnique]):
         self.techniques = techniques
@@ -26,12 +32,11 @@ class CombinationTechnique(AugmentationTechnique):
             sequence = technique.apply(sequence)
         return sequence
 
-# Deterministic Augmentation Techniques
 
 class ReverseComplement(AugmentationTechnique):
     def __init__(self, complement_rate: float = 1.0):
         self.complementation_rate = complement_rate
-    
+
     def apply(self, sequence: str) -> str:
         """
         Applies the reverse complement augmentation to the input sequence.
@@ -45,7 +50,6 @@ class ReverseComplement(AugmentationTechnique):
         bio_seq = Seq(sequence)
         return str(bio_seq.reverse_complement())
 
-# Stochastic Augmentation Techniques
 
 class RandomMutation(AugmentationTechnique):
     def __init__(
@@ -87,7 +91,7 @@ class NoAugmentation(AugmentationTechnique):
         return sequence
 
 
-class IndelAugmentation(AugmentationTechnique):
+class InsertionDeletion(AugmentationTechnique):
     def __init__(
         self,
         insertion_rate: float = 0.01,
@@ -122,7 +126,7 @@ class IndelAugmentation(AugmentationTechnique):
         """
         Applies the indel augmentation to the input sequence.
         Insertions respect GC ratio; deletions remove contiguous segments.
-        
+
         :param str sequence: The input sequence to augment.
         :return str: The augmented sequence.
         """

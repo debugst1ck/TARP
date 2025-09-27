@@ -12,6 +12,9 @@ from typing import Optional
 
 from services.training import Trainer
 
+from services.evaluation import Extremeum
+
+
 class TripletMetricTrainer(Trainer):
     def __init__(
         self,
@@ -27,40 +30,26 @@ class TripletMetricTrainer(Trainer):
         margin: float = 1.0,
         num_workers: int = 0,
         criterion: Optional[nn.Module] = None,
+        monitor_metric: str = "validation_loss",
     ):
-        self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.device = device
-        self.batch_size = batch_size
-        self.epochs = epochs
-        self.max_grad_norm = max_grad_norm
+        super().__init__(
+            model=model,
+            train_dataset=train_dataset,
+            valid_dataset=valid_dataset,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            device=device,
+            batch_size=batch_size,
+            epochs=epochs,
+            max_grad_norm=max_grad_norm,
+            num_workers=num_workers,
+            monitor_metric=monitor_metric,
+        )
 
         # Loss function
         self.criterion = (
             criterion if criterion is not None else nn.TripletMarginLoss(margin=margin)
         )
-
-        self.train_dataset = train_dataset
-        self.valid_dataset = valid_dataset
-
-        self.train_dataloader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            pin_memory=True,
-            num_workers=num_workers,
-        )
-        self.valid_dataloader = DataLoader(
-            valid_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            pin_memory=True,
-            num_workers=num_workers,
-        )
-        self.model.to(self.device)
-
-        self.history: list[dict[str, float]] = [{} for _ in range(self.epochs)]
 
     def _move_item_to_device(
         self, item: dict[str, Tensor]
@@ -71,124 +60,74 @@ class TripletMetricTrainer(Trainer):
             mask = mask.to(self.device)
         return sequence, mask
 
-    def _train_epoch(self, epoch: int) -> float:
-        self.model.train()
-        total_loss = 0.0
-        loop = tqdm(
-            self.train_dataloader,
-            desc=f"Training {epoch+1}/{self.epochs}",
-            unit="batch",
+    def training_step(self, batch: dict[str, Tensor]) -> Tensor:
+        anchor, anchor_mask = self._move_item_to_device(batch["anchor"])
+        positive, positive_mask = self._move_item_to_device(batch["positive"])
+        negative, negative_mask = self._move_item_to_device(batch["negative"])
+
+        anchor_embedding, positive_embedding, negative_embedding = self.model(
+            anchor,
+            positive,
+            negative,
+            anchor_mask=anchor_mask,
+            positive_mask=positive_mask,
+            negative_mask=negative_mask,
         )
 
-        for batch in loop:
-            # Move data to device
-            anchor, anchor_mask = self._move_item_to_device(batch["anchor"])
-            positive, positive_mask = self._move_item_to_device(batch["positive"])
-            negative, negative_mask = self._move_item_to_device(batch["negative"])
+        loss = self.criterion(anchor_embedding, positive_embedding, negative_embedding)
+        return loss
 
-            # Zero gradients
-            self.optimizer.zero_grad()
+    def validation_step(
+        self, batch: dict[str, Tensor]
+    ) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
+        anchor, anchor_mask = self._move_item_to_device(batch["anchor"])
+        positive, positive_mask = self._move_item_to_device(batch["positive"])
+        negative, negative_mask = self._move_item_to_device(batch["negative"])
 
-            # Forward pass
-            anchor_embeddings, positive_embeddings, negative_embeddings = self.model(
-                anchor,
-                positive,
-                negative,
-                anchor_mask=anchor_mask,
-                positive_mask=positive_mask,
-                negative_mask=negative_mask,
-            )
-            loss: Tensor = self.criterion(
-                anchor_embeddings, positive_embeddings, negative_embeddings
-            )
-
-            loss.backward()
-
-            # Gradient clipping
-            if self.max_grad_norm is not None:
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-
-            # Optimizer step
-            self.optimizer.step()
-            total_loss += loss.item()
-            loop.set_postfix(loss=loss.item())
-
-        average_loss = total_loss / len(self.train_dataloader)
-        return average_loss
-
-    def _validate_epoch(self, epoch: int) -> float:
-        self.model.eval()
-        total_loss = 0.0
-        loop = tqdm(
-            self.valid_dataloader,
-            desc=f"Validation {epoch+1}/{self.epochs}",
-            unit="batch",
+        anchor_embedding, positive_embedding, negative_embedding = self.model(
+            anchor,
+            positive,
+            negative,
+            anchor_mask=anchor_mask,
+            positive_mask=positive_mask,
+            negative_mask=negative_mask,
         )
 
-        with torch.no_grad():
-            for batch in loop:
-                # Move data to device
-                anchor, anchor_mask = self._move_item_to_device(batch["anchor"])
-                positive, positive_mask = self._move_item_to_device(batch["positive"])
-                negative, negative_mask = self._move_item_to_device(batch["negative"])
+        loss = self.criterion(anchor_embedding, positive_embedding, negative_embedding)
 
-                # Forward pass
-                anchor_embeddings, positive_embeddings, negative_embeddings = self.model(
-                    anchor,
-                    positive,
-                    negative,
-                    anchor_mask=anchor_mask,
-                    positive_mask=positive_mask,
-                    negative_mask=negative_mask,
-                )
-                
-                loss: Tensor = self.criterion(
-                    anchor_embeddings, positive_embeddings, negative_embeddings
-                )
-
-                total_loss += loss.item()
-                loop.set_postfix(loss=loss.item())
-
-        average_loss = total_loss / len(self.valid_dataloader)
-        return average_loss
-    
-    def fit(self):
-        best_validation_loss = float("inf")
-        best_model_state = None
-
-        for epoch in range(self.epochs):
-            ColoredLogger.info(f"Starting epoch {epoch+1}/{self.epochs}")
-            train_loss = self._train_epoch(epoch)
-            ColoredLogger.info(f"Training loss: {train_loss:.4f}")
-
-            validation_loss = self._validate_epoch(epoch)
-            ColoredLogger.info(f"Validation loss: {validation_loss:.4f}")
-
-            # Learning rate logging
-            if self.scheduler is not None:
-                if isinstance(self.scheduler, ReduceLROnPlateau):
-                    lr = self.scheduler.optimizer.param_groups[0]["lr"]
-                else:
-                    lr = self.scheduler.get_last_lr()[0]
-                ColoredLogger.info(f"Learning rate: {lr:.6f}")
-
-            self.history[epoch] = {
-                "train_loss": train_loss,
-                "validation_loss": validation_loss,
-            }
-
-            # Scheduler step
-            if self.scheduler is not None:
-                if isinstance(self.scheduler, ReduceLROnPlateau):
-                    self.scheduler.step(validation_loss)
-                else:
-                    self.scheduler.step()
-
-            # Save best
-            if validation_loss < best_validation_loss:
-                best_validation_loss = validation_loss
-                best_model_state = self.model.state_dict()
-
-        if best_model_state is not None:
-            self.model.load_state_dict(best_model_state)
-            ColoredLogger.info(f"Best model loaded with validation loss: {best_validation_loss:.4f}")
+        return (
+            loss,
+            (
+                anchor_embedding.detach().cpu(),
+                positive_embedding.detach().cpu(),
+                negative_embedding.detach().cpu(),
+            ),
+            None,
+        )
+        
+    def compute_metrics(
+        self, prediction: list[Tensor], expected: list[Tensor]
+    ) -> dict[str, float]:
+        # Prediction is a list of tuples (anchor, positive, negative)
+        
+        anchors, positives, negatives = zip(*prediction)
+        
+        anchors = torch.cat(anchors, dim=0)
+        positives = torch.cat(positives, dim=0)
+        negatives = torch.cat(negatives, dim=0)
+        
+        # Compute distances
+        positive_distances = torch.norm(anchors - positives, dim=1)
+        negative_distances = torch.norm(anchors - negatives, dim=1)
+        
+        # Compute metrics
+        margin = self.criterion.margin
+        
+        # Accuracy: fraction of triplets where positive is closer than negative by at least margin
+        accuracy = ((negative_distances - positive_distances) > margin).float().mean().item()
+        
+        return {
+            "triplet_accuracy": accuracy,
+            "mean_positive_distance": positive_distances.mean().item(),
+            "mean_negative_distance": negative_distances.mean().item(),
+        }

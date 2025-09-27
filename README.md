@@ -1,5 +1,12 @@
 # TARP: Transformers for Antimicrobial Resistance Prediction 
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/release/python-380/)
+[![GitHub License](https://img.shields.io/github/license/debugst1ck/TARP.svg)](https://github.com/debugst1ck/TARP/blob/main/LICENSE)
+[![GitHub Issues](https://img.shields.io/github/issues/debugst1ck/TARP.svg)](https://github.com/debugst1ck/TARP/issues)
+[![GitHub Stars](https://img.shields.io/github/stars/debugst1ck/TARP.svg)](https://github.com/debugst1ck/TARP/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/debugst1ck/TARP.svg)](https://github.com/debugst1ck/TARP/fork)
+
 This repository is a suite of tools and models designed to predict antimicrobial resistance (AMR) using transformer-based architectures. The project uses state-of-the-art techniques in natural language processing (NLP) to analyze genetic sequences and predict resistance profiles.
+
 ## Developer's notes
 The codebase is structured to facilitate easy experimentation with different transformer architectures and hyperparameters. The main components include data preprocessing, model training, evaluation, and visualization of results.
 ### Attention Mask

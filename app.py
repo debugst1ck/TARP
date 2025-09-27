@@ -1,3 +1,4 @@
+import datetime
 import torch
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
 from services.datasource.sequence import TabularSequenceDataSource
 from services.datasets.classification.multilabel import MultiLabelClassificationDataset
-from services.datasets.metric.triplet import MultiLabelTripletDataset
+from services.datasets.metric.triplet import MultilabelOfflineTripletDataset
 from services.training.classification.multilabel import MultiLabelClassificationTrainer
 
 from services.training.metric.triplet import TripletMetricTrainer
@@ -27,7 +28,7 @@ from model.finetuning.classification import ClassificationModel
 from services.preprocessing.augumentation import (
     CombinationTechnique,
     RandomMutation,
-    IndelAugmentation,
+    InsertionDeletion,
     ReverseComplement,
 )
 
@@ -92,13 +93,13 @@ def app() -> None:
         augumentation=CombinationTechnique(
             [
                 RandomMutation(),
-                IndelAugmentation(),
+                InsertionDeletion(),
                 ReverseComplement(0.5),
             ]
         ),
     )
 
-    triplet_dataset = MultiLabelTripletDataset(base_dataset=dataset)
+    triplet_dataset = MultilabelOfflineTripletDataset(base_dataset=dataset)
 
     # Make a subset of the dataset for quick testing
     valid_dataset = Subset(dataset, range(768))
@@ -106,7 +107,7 @@ def app() -> None:
 
     encoder = LstmEncoder(
         vocabulary_size=dataset.tokenizer.vocab_size,
-        embedding_dimension=768,
+        embedding_dimension=512,
         hidden_dimension=512,
         padding_id=dataset.tokenizer.pad_token_id,
         number_of_layers=3,
@@ -159,7 +160,7 @@ def app() -> None:
         optimizer=optimizer_triplet,
         scheduler=ReduceLROnPlateau(optimizer_triplet, mode="min", patience=3),
         device=device,
-        epochs=1,
+        epochs=2,
         num_workers=2,
     )
     metric_learning_trainer.fit()
@@ -178,12 +179,13 @@ def app() -> None:
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
         criterion=AsymmetricFocalLoss(
-            gamma_pos=2, gamma_neg=2, class_weights=pos_weights.to(device)
+            gamma_pos=2,
+            gamma_neg=2,  # class_weights=pos_weights.to(device)
         ),
     )
 
     trainer.fit()
-
+    
     # Save the model as safetensors
     # Check if directory exists
     Path("temp/models").mkdir(parents=True, exist_ok=True)
@@ -191,7 +193,7 @@ def app() -> None:
 
     torch.save(
         classification_model.state_dict(),
-        f"temp/models/{classification_model.encoder.__class__.__name__}.pt",
+        f"temp/models/{classification_model.encoder.__class__.__name__}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pt",
     )
 
     ColoredLogger.info("Training complete")
@@ -200,7 +202,9 @@ def app() -> None:
     history = trainer.history  # List of dicts
     history_df = pl.DataFrame(history)
     fig = px.line(history_df, y=history_df.columns, title="Training History")
-    fig.write_html(f"temp/history/{classification_model.encoder.__class__.__name__}.html")
+    fig.write_html(
+        f"temp/history/{classification_model.encoder.__class__.__name__}.html"
+    )
 
 
 if __name__ == "__main__":

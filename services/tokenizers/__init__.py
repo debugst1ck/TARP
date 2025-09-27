@@ -18,10 +18,3 @@ class Tokenizer:
     @property
     def vocab_size(self) -> int:
         raise NotImplementedError
-
-    def train(self, texts: list[str], vocab_size: int = 32000, **kwargs):
-        """
-        Optional: Train tokenizer on provided texts.
-        Only implemented for trainable subclasses.
-        """
-        raise NotImplementedError
