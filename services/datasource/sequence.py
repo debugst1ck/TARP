@@ -2,9 +2,13 @@ import polars as pl
 from pathlib import Path
 from typing import Optional
 from Bio import SeqIO
+from abc import ABC, abstractmethod
+from functools import lru_cache
+from Bio.Seq import Seq
+# Mru cache could be used for caching sequences if needed
 
 
-class SequenceDataSource:
+class SequenceDataSource(ABC):
     """
     Encapsulate file interactions for sequence datasets.
     """
@@ -19,6 +23,7 @@ class SequenceDataSource:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def retrieve(self, index: int) -> dict:
         """
         Retrieve a single row from the data source.
@@ -29,8 +34,18 @@ class SequenceDataSource:
         """
         raise NotImplementedError
 
+    def batch(self, indices: list[int]) -> list[dict]:
+        """
+        Retrieve multiple rows from the data source.
 
-class TabularSequenceDataSource(SequenceDataSource):
+        :param list[int] indices: The indices of the rows to retrieve.
+        :return: A list of dictionary representations of the rows.
+        :rtype: list[dict]
+        """
+        return [self.retrieve(i) for i in indices]
+
+
+class TabularSequenceSource(SequenceDataSource):
     """
     Reads from a tabular data source (e.g., CSV, Excel, Parquet). Stores in a Polars DataFrame.
     """
@@ -61,8 +76,13 @@ class TabularSequenceDataSource(SequenceDataSource):
             return self.dataframe.row(index, named=True)
         return {}
 
+    def batch(self, indices: list[int]) -> list[dict]:
+        if self.dataframe is not None:
+            return self.dataframe.rows(indices, named=True)
+        return []
 
-class FastaDirectoryDataSource(SequenceDataSource):
+
+class FastaDirectorySource(SequenceDataSource):
     """
     Reads from a directory of FASTA files. Metadata is stored as a Tabular source.
     """
@@ -117,7 +137,7 @@ class FastaDirectoryDataSource(SequenceDataSource):
         return row
 
 
-class CombinationDataSource(SequenceDataSource):
+class CombinationSource(SequenceDataSource):
     """
     Combines multiple data sources into one.
     """
@@ -137,7 +157,7 @@ class CombinationDataSource(SequenceDataSource):
         raise IndexError("Index out of range for combined data sources.")
 
 
-class InMemorySequenceDataSource(SequenceDataSource):
+class InMemorySequenceSource(SequenceDataSource):
     """
     Stores sequences in memory for fast access.
     """
@@ -151,3 +171,108 @@ class InMemorySequenceDataSource(SequenceDataSource):
 
     def retrieve(self, index: int) -> dict:
         return self.dataframe.row(index, named=True)
+
+
+class FastaSliceSource(SequenceDataSource):
+    """
+    Reads a slice of sequences from FASTA files. Uses LRU caching for efficiency.
+    """
+
+    def __init__(
+        self,
+        directory: Path,
+        metadata: Path,
+        key_column: str,
+        start_column: str,
+        end_column: str,
+        orientation_column: Optional[str] = None,
+        sequence_column: str = "sequence",
+        cache_size: int = 128,
+    ):
+        self.directory = directory
+        self.metadata = metadata
+        self.key_column = key_column
+        self.start_column = start_column
+        self.end_column = end_column
+        self.orientation_column = orientation_column
+        self.sequence_column = sequence_column
+
+        self.df = (
+            pl.read_parquet(metadata)
+            if metadata.suffix == ".parquet"
+            else pl.read_csv(metadata)
+        )
+
+        self._fasta_map = {p.stem: p for p in self.directory.glob("*.fasta")}
+        
+        self._load_sequence = lru_cache(maxsize=cache_size)(self._load_sequence_uncached)
+
+    def _load_sequence_uncached(self, key: str) -> Seq:
+        """
+        Load a full genome sequence from FASTA.
+        
+        :param str key: The key corresponding to the FASTA file.
+        :return str: The full genome sequence as a string.
+        """
+        fasta_path = self._fasta_map.get(key)
+        if not fasta_path:
+            raise FileNotFoundError(f"No FASTA found for {key}")
+
+        with open(fasta_path) as handle:
+            return [rec.seq for rec in SeqIO.parse(handle, "fasta")][0]
+        
+    @property
+    def height(self) -> int:
+        return self.df.height
+    
+    def retrieve(self, index: int) -> dict:
+        row = self.df.row(index, named=True)
+        key = row[self.key_column]
+        start = row[self.start_column]
+        end = row[self.end_column]
+        orientation = row.get(self.orientation_column, "+")
+        
+        if key not in self._fasta_map:
+            return {}
+        try:
+            full_sequence = self._load_sequence(key)
+        except FileNotFoundError:
+            return {}
+
+        if start is None and end is None:
+            sequence = full_sequence
+        
+        if orientation == "-":
+            sequence = sequence.reverse_complement()
+
+        row[self.sequence_column] = str(sequence)
+        return row
+    
+    def batch(self, indices: list[int]) -> list[dict]:
+        subset = self.df[indices]
+        groups = subset.partition_by(self.key_column, as_dict=True)
+        
+        results = []
+        for key, group in groups.items():
+            if key not in self._fasta_map:
+                continue
+            
+            full_sequence = self._load_sequence(key)
+            
+            for row in group.rows(named=True):
+                start = row[self.start_column]
+                end = row[self.end_column]
+                orientation = row.get(self.orientation_column, "+")
+                
+                if start is None and end is None:
+                    sequence = full_sequence
+                else:
+                    sequence = full_sequence[start:end]
+                
+                if orientation == "-":
+                    sequence = sequence.reverse_complement()
+                
+                row[self.sequence_column] = str(sequence)
+                results.append(row)
+        assert len(results) == len(indices)
+        return results

@@ -6,7 +6,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
-from services.datasource.sequence import TabularSequenceDataSource
+from services.datasource.sequence import TabularSequenceSource
 from services.datasets.classification.multilabel import MultiLabelClassificationDataset
 from services.datasets.metric.triplet import MultilabelOfflineTripletDataset
 from services.training.classification.multilabel import MultiLabelClassificationTrainer
@@ -83,8 +83,8 @@ def app() -> None:
 
     # Create dataset
     dataset = MultiLabelClassificationDataset(
-        TabularSequenceDataSource(
-            source=Path("temp/data/preprocessed/card_cleaned.parquet")
+        TabularSequenceSource(
+            source=Path("temp/data/preprocessed/card_amr.parquet")
         ),
         Dnabert2Tokenizer(),
         sequence_column="sequence",
@@ -107,10 +107,10 @@ def app() -> None:
 
     encoder = LstmEncoder(
         vocabulary_size=dataset.tokenizer.vocab_size,
-        embedding_dimension=512,
-        hidden_dimension=512,
+        embedding_dimension=128,
+        hidden_dimension=256,
         padding_id=dataset.tokenizer.pad_token_id,
-        number_of_layers=3,
+        number_of_layers=2,
         dropout=0.2,
         bidirectional=True,
     )
@@ -174,7 +174,7 @@ def app() -> None:
         optimizer=optimizer_classification,
         scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
         device=device,
-        epochs=9,
+        epochs=20,
         num_workers=4,
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
