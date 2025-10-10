@@ -73,7 +73,9 @@ class Trainer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def validation_step(self, batch: dict[str, Tensor]) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
+    def validation_step(
+        self, batch: dict[str, Tensor]
+    ) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
         """
         Perform a single validation step.
 
@@ -156,22 +158,23 @@ class Trainer(ABC):
 
         for epoch in range(self.epochs):
             ColoredLogger.info(f"Starting epoch {epoch+1}/{self.epochs}")
-            
+
             training_loss = self._training_epoch(epoch)
             ColoredLogger.info(f"Training loss: {training_loss:.4f}")
 
-            validation_loss, validation_metrics = self._validation_epoch(epoch) 
+            validation_loss, validation_metrics = self._validation_epoch(epoch)
             ColoredLogger.info(f"Validation loss: {validation_loss:.4f}")
-            
+
             for metric_name, metric_value in validation_metrics.items():
                 if metric_value is None:
                     continue
-                ColoredLogger.debug(f"{metric_name}: {metric_value:.4f}")
-
+                ColoredLogger.debug(f"{metric_name}: {metric_value:.4f}")   
+            
+            # Log epoch results
             self.history[epoch] = {
                 "training_loss": training_loss,
                 "validation_loss": validation_loss,
-                **{k: v for k, v in validation_metrics.items() if v is not None}
+                **{k: v for k, v in validation_metrics.items() if v is not None},
             }
 
             current_metric_value = self.history[epoch].get(self.monitor_metric, None)
@@ -182,6 +185,17 @@ class Trainer(ABC):
                     self.scheduler.step(current_metric_value)
                 else:
                     self.scheduler.step()
+
+            # Get learning rate
+            current_lr = float(
+                sum(pg["lr"] for pg in self.optimizer.param_groups)
+                / len(self.optimizer.param_groups)
+            )
+
+            ColoredLogger.info(f"Current learning rate: {current_lr:.6e}")
+            
+            # Add current learning rate to history
+            self.history[epoch]["learning_rate"] = current_lr
 
             # Check for improvement
             if current_metric_value is not None and improvement(

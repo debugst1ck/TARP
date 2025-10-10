@@ -23,6 +23,7 @@ import polars as pl
 from model.backbone.untrained.lstm import LstmEncoder
 
 from model.backbone.pretrained.dnabert2 import Dnabert2Encoder, FrozenDnabert2Encoder
+from model.backbone.untrained.hyena import HyenaEncoder
 from model.finetuning.classification import ClassificationModel
 
 from services.preprocessing.augumentation import (
@@ -105,14 +106,23 @@ def app() -> None:
     valid_dataset = Subset(dataset, range(768))
     train_dataset = Subset(dataset, range(768, len(dataset)))
 
-    encoder = LstmEncoder(
+    # encoder = LstmEncoder(
+    #     vocabulary_size=dataset.tokenizer.vocab_size,
+    #     embedding_dimension=128,
+    #     hidden_dimension=256,
+    #     padding_id=dataset.tokenizer.pad_token_id,
+    #     number_of_layers=2,
+    #     dropout=0.2,
+    #     bidirectional=True,
+    # )
+    
+    encoder = HyenaEncoder(
         vocabulary_size=dataset.tokenizer.vocab_size,
         embedding_dimension=128,
         hidden_dimension=256,
         padding_id=dataset.tokenizer.pad_token_id,
         number_of_layers=2,
         dropout=0.2,
-        bidirectional=True,
     )
 
     classification_model = ClassificationModel(
@@ -137,6 +147,7 @@ def app() -> None:
     )
 
     # Use torch compile to optimize the model
+    ColoredLogger.info("Compiling model with torch.compile")
     torch.compile(classification_model, mode="reduce-overhead")
     torch.compile(triplet_model, mode="reduce-overhead")
 
@@ -153,6 +164,7 @@ def app() -> None:
     )
     optimizer_triplet = AdamW(triplet_model.parameters(), lr=0.001, weight_decay=1e-2)
 
+    ColoredLogger.info("Training model with triplet loss first")
     metric_learning_trainer = TripletMetricTrainer(
         model=triplet_model,
         train_dataset=triplet_train_dataset,
@@ -167,6 +179,7 @@ def app() -> None:
 
     classification_model.encoder.load_state_dict(triplet_model.encoder.state_dict())
 
+    ColoredLogger.info("Training model with multi-label classification loss")
     trainer = MultiLabelClassificationTrainer(
         model=classification_model,
         train_dataset=train_dataset,
@@ -183,7 +196,6 @@ def app() -> None:
             gamma_neg=2,  # class_weights=pos_weights.to(device)
         ),
     )
-
     trainer.fit()
     
     # Save the model as safetensors
