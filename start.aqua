@@ -9,9 +9,9 @@
 
 # Load necessary modules
 ## GCCCore 14.2.0
-module load GCCcore/14.2.0
-## Python 3.13.1 # Does not work on HPC, so reverting to 3.12.3
-module load Python/3.13.1
+module load GCCcore/13.3.0
+## Python 3.13.1 # Does not work on HPC, H100, so reverting to 3.12.3
+module load Python/3.12.3
 ## CUDA 12.8
 module load CUDA/12.8.0
 
