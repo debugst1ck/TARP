@@ -53,7 +53,7 @@ def app() -> None:
     torch.cuda.manual_seed_all(SEED)
     ColoredLogger.info(f"Set random seed to {SEED}")
 
-    df = pl.read_parquet("temp/data/preprocessed/card_cleaned.parquet")
+    df = pl.read_parquet("temp/data/preprocessed/card_amr.parquet")
     # Get every column except 'sequence' as label columns
     label_columns = [col for col in df.collect_schema().names() if col != "sequence"]
 
