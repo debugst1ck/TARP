@@ -18,3 +18,9 @@ logs/
 
 # Ignore IDE specific files
 .vscode/
+
+# Build files
+build/
+
+# Egg and wheel files
+*.egg-info/

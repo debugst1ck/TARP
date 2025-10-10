@@ -22,14 +22,20 @@ if [ ! -d "./.venv" ]; then
     # Create a virtual environment if it does not exist
     python -m venv ./.venv
 
+    # Activate the virtual environment
+    source ./.venv/bin/activate
+
     # Upgrade pip in the virtual environment
-    ./.venv/bin/python -m pip install --upgrade pip
+    pip install --upgrade pip setuptools wheel
 
     # Install the required packages
-    ./.venv/bin/python -m pip install -r requirements.txt
+    pip install -e . --extra-index-url https://download.pytorch.org/whl/cu128
 
     # Uninstall triton as it conflicts with torch
-    ./.venv/bin/python -m pip uninstall -y triton    
+    ./.venv/bin/python -m pip uninstall -y triton
+
+    # Deactivate the virtual environment
+    deactivate
 
     echo "Virtual environment created and packages installed."
 else
@@ -42,5 +48,10 @@ source ./.venv/bin/activate
 # Tell git to update the project to latest
 git pull origin main
 
-# Now run the script
-python app.py
+# Now run the script as pyproject.toml is configured to run it
+tarp
+
+# Deactivate the virtual environment
+deactivate
+
+echo "Job completed."

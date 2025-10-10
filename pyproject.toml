@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tarp"
+version = "0.1.0"
+description = "TARP - A deep learning tool for predicting antimicrobial resistance from nucleotide sequences"
+authors = [
+    { name = "Joel Jacob", email = "j7.jacob@qut.edu.au" }
+]
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+
+dependencies = [
+    "pandas",
+    "polars",
+    "numpy",
+    "scikit-learn",
+    "torch",
+    "transformers",
+    "tokenizers",
+    "tqdm",
+    "plotly",
+    "pyarrow",
+    "scipy",
+    "einops",
+    "biopython",
+    "safetensors",
+    "ipykernel",
+]
+
+[project.scripts]
+tarp = "tarp.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["temp*", "tests*"]
