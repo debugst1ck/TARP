@@ -11,12 +11,16 @@ import plotly.express as px
 import polars as pl
 
 from tarp.services.utilities.seed import establish_random_seed
-from tarp.services.loggers.colored import ColoredLogger
+from tarp.cli.logging.colored import ColoredLogger
 from tarp.services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
 from tarp.services.datasource.sequence import TabularSequenceSource
-from tarp.services.datasets.classification.multilabel import MultiLabelClassificationDataset
+from tarp.services.datasets.classification.multilabel import (
+    MultiLabelClassificationDataset,
+)
 from tarp.services.datasets.metric.triplet import MultilabelOfflineTripletDataset
-from tarp.services.training.classification.multilabel import MultiLabelClassificationTrainer
+from tarp.services.training.classification.multilabel import (
+    MultiLabelClassificationTrainer,
+)
 from tarp.services.evaluation.losses.multilabel import AsymmetricFocalLoss
 from tarp.services.training.metric.triplet import TripletMetricTrainer
 from tarp.services.preprocessing.augumentation import (
@@ -29,6 +33,7 @@ from tarp.services.preprocessing.augumentation import (
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 from tarp.model.backbone.untrained.hyena import HyenaEncoder
 from tarp.model.finetuning.classification import ClassificationModel
+
 
 def main() -> None:
     ColoredLogger.info("App started")
@@ -67,9 +72,7 @@ def main() -> None:
 
     # Create dataset
     dataset = MultiLabelClassificationDataset(
-        TabularSequenceSource(
-            source=Path("temp/data/preprocessed/card_amr.parquet")
-        ),
+        TabularSequenceSource(source=Path("temp/data/preprocessed/card_amr.parquet")),
         Dnabert2Tokenizer(),
         sequence_column="sequence",
         label_columns=label_columns,
@@ -98,7 +101,7 @@ def main() -> None:
     #     dropout=0.2,
     #     bidirectional=True,
     # )
-    
+
     encoder = HyenaEncoder(
         vocabulary_size=dataset.tokenizer.vocab_size,
         embedding_dimension=128,
@@ -180,7 +183,7 @@ def main() -> None:
         ),
     )
     trainer.fit()
-    
+
     # Save the model as safetensors
     # Check if directory exists
     Path("temp/models").mkdir(parents=True, exist_ok=True)

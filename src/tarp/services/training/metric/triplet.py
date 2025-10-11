@@ -9,7 +9,7 @@ from typing import Optional
 
 from tarp.services.training import Trainer
 from tarp.services.evaluation import Extremeum
-from tarp.services.loggers.colored import ColoredLogger
+from tarp.cli.logging.colored import ColoredLogger
 
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 

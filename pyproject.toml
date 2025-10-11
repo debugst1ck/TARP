@@ -7,7 +7,7 @@ name = "tarp"
 version = "0.1.0"
 description = "TARP - A deep learning tool for predicting antimicrobial resistance from nucleotide sequences"
 authors = [
-    { name = "Joel Jacob", email = "j7.jacob@qut.edu.au" }
+    { name = "Joel Jacob", email = "j7.jacob@hdr.qut.edu.au" }
 ]
 readme = "README.md"
 license = "Apache-2.0"
@@ -33,7 +33,21 @@ dependencies = [
 
 [project.scripts]
 tarp = "tarp.app:main"
+train = "tarp.train:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 exclude = ["temp*", "tests*"]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "pytest",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
+    "myst-parser",
+]

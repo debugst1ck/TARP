@@ -7,6 +7,37 @@
 
 This repository is a suite of tools and models designed to predict antimicrobial resistance (AMR) using transformer-based architectures. The project uses state-of-the-art techniques in natural language processing (NLP) to analyze genetic sequences and predict resistance profiles.
 
+## How to use
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/debugst1ck/TARP.git
+    ```
+2. Navigate to the project directory:
+    ```bash
+    cd TARP
+    ```
+3. (Optional, Recommended) Create and activate a virtual environment:
+    For Windows PowerShell:
+    ```powershell
+    Set-ExecutionPolicy Unrestricted -Scope Process
+    python -m venv .venv
+    .venv\Scripts\activate
+    ```
+    For Unix:
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate
+    ```
+4. Install the required dependencies (use the correct index URL for your CUDA version):
+    ```bash
+    pip install -e . --extra-index-url https://download.pytorch.org/whl/cu128 # For CUDA 12.8
+    ```
+5. Prepare your dataset in the required format (FASTA files with corresponding labels).
+6. Run the training script with your dataset:
+    ```bash
+    tarp
+    ```
+
 ## Developer's notes
 The codebase is structured to facilitate easy experimentation with different transformer architectures and hyperparameters. The main components include data preprocessing, model training, evaluation, and visualization of results.
 ### Attention Mask

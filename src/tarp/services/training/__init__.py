@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 from tarp.services.evaluation import Extremeum
-from tarp.services.loggers.colored import ColoredLogger
+from tarp.cli.logging.colored import ColoredLogger
 
 
 class Trainer(ABC):

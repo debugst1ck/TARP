@@ -4,7 +4,7 @@ import torch
 import sklearn.metrics
 from typing import Union
 
-from tarp.services.loggers.colored import ColoredLogger
+from tarp.cli.logging.colored import ColoredLogger
 
 
 class MultilabelMetrics:

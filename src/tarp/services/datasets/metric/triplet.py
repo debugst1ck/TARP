@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 
 from tarp.services.datasets.classification.multilabel import MultiLabelClassificationDataset
-from tarp.services.loggers.colored import ColoredLogger
+from tarp.cli.logging.colored import ColoredLogger
 
 
 class MultilabelOfflineTripletDataset(Dataset):
