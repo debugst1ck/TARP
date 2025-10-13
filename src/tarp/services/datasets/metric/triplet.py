@@ -30,20 +30,24 @@ class MultilabelOfflineTripletDataset(Dataset):
             raise ValueError("Base dataset must contain at least two samples.")
 
         expected_columns = base_dataset.label_columns
-        
+
         self.labels = None
-        
+
         if label_cache:
-            print(f"Checking for label cache at: {label_cache}")
+            ColoredLogger.debug(f"Checking for label cache at: {label_cache}")
             df = pl.read_parquet(label_cache)
             cached_columns = df.columns
 
             # ✅ Ensure column order and names match expected
-            if set(cached_columns) == set(expected_columns) and df.shape[0] == len(self.base_dataset):
+            if set(cached_columns) == set(expected_columns) and df.shape[0] == len(
+                self.base_dataset
+            ):
                 # Reorder columns to match expected order
                 df = df.select(expected_columns)
                 self.labels = torch.tensor(df.to_numpy(), dtype=torch.float32)
-                ColoredLogger.info(f"Loaded labels from cache (aligned to label_columns): {label_cache}")
+                ColoredLogger.info(
+                    f"Loaded labels from cache (aligned to label_columns): {label_cache}"
+                )
             else:
                 ColoredLogger.warning(
                     f"Label cache mismatch — columns or size differ. "
@@ -60,7 +64,9 @@ class MultilabelOfflineTripletDataset(Dataset):
             )
 
             # Convert to Polars DataFrame for saving
-            df = pl.DataFrame(self.labels.numpy()).write_parquet(
+            df = pl.DataFrame(
+                self.labels.numpy(), schema=expected_columns
+            ).write_parquet(
                 label_cache
                 if label_cache
                 else Path("temp/data/interim/labels_cache.parquet")
