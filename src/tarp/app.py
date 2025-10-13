@@ -13,7 +13,11 @@ import polars as pl
 from tarp.services.utilities.seed import establish_random_seed
 from tarp.cli.logging.colored import ColoredLogger
 from tarp.services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
-from tarp.services.datasource.sequence import TabularSequenceSource
+from tarp.services.datasource.sequence import (
+    TabularSequenceSource,
+    CombinationSource,
+    FastaSliceSource,
+)
 from tarp.services.datasets.classification.multilabel import (
     MultiLabelClassificationDataset,
 )
@@ -34,6 +38,8 @@ from tarp.model.finetuning.metric.triplet import TripletMetricModel
 from tarp.model.backbone.untrained.hyena import HyenaEncoder
 from tarp.model.finetuning.classification import ClassificationModel
 
+from tarp.config import LstmConfig, HyenaConfig, DnabertConfig
+
 
 def main() -> None:
     ColoredLogger.info("App started")
@@ -42,37 +48,29 @@ def main() -> None:
     SEED = establish_random_seed(42)
     ColoredLogger.info(f"Random seed set to {SEED}")
 
-    df = pl.read_parquet("temp/data/preprocessed/card_amr.parquet")
-    # Get every column except 'sequence' as label columns
-    label_columns = [col for col in df.collect_schema().names() if col != "sequence"]
-
-    N = df.height
-    alphas, pos_weights = [], []
-
-    for col in label_columns:
-        n_i = df[col].sum()  # number of positives
-        frac_pos = n_i / N
-        frac_neg = 1 - frac_pos
-
-        # ---- For FocalLoss (alpha balancing factor) ----
-        # Higher alpha when positives are rare
-        alpha_i = frac_neg / (frac_pos + frac_neg)
-        alphas.append(alpha_i)
-
-        # ---- For BCEWithLogitsLoss (pos_weight) ----
-        # Weight positive examples higher when rare
-        pos_w = frac_neg / (frac_pos + 1e-8)
-        pos_weights.append(pos_w)
-
-    alphas = torch.tensor(alphas, dtype=torch.float)
-    pos_weights = torch.tensor(pos_weights, dtype=torch.float)
-
-    # Delete df to save memory
-    del df
+    label_columns = (
+        pl.read_csv(Path("temp/data/processed/labels.csv")).to_series().to_list()
+    )
 
     # Create dataset
     dataset = MultiLabelClassificationDataset(
-        TabularSequenceSource(source=Path("temp/data/preprocessed/card_amr.parquet")),
+        CombinationSource(
+            [
+                TabularSequenceSource(
+                    source=Path("temp/data/processed/card_amr.parquet")
+                ),
+                FastaSliceSource(
+                    directory=Path("temp/data/external/sequences"),
+                    metadata=Path(
+                        "temp/data/processed/non_amr_genes_10000.parquet"
+                    ),
+                    key_column="genomic_nucleotide_accession.version",
+                    start_column="start_position_on_the_genomic_accession",
+                    end_column="end_position_on_the_genomic_accession",
+                    orientation_column="orientation",
+                ),
+            ]
+        ),
         Dnabert2Tokenizer(),
         sequence_column="sequence",
         label_columns=label_columns,
@@ -86,29 +84,31 @@ def main() -> None:
         ),
     )
 
-    triplet_dataset = MultilabelOfflineTripletDataset(base_dataset=dataset)
+    triplet_dataset = MultilabelOfflineTripletDataset(base_dataset=dataset, label_cache=Path("temp/data/interim/labels_cache.parquet"))
 
     # Make a subset of the dataset for quick testing
-    valid_dataset = Subset(dataset, range(768))
     train_dataset = Subset(dataset, range(768, len(dataset)))
+    valid_dataset = Subset(dataset, range(768))
 
     # encoder = LstmEncoder(
     #     vocabulary_size=dataset.tokenizer.vocab_size,
-    #     embedding_dimension=128,
-    #     hidden_dimension=256,
+    #     embedding_dimension=LstmConfig.embedding_dimension,
+    #     hidden_dimension=LstmConfig.hidden_dimension,
     #     padding_id=dataset.tokenizer.pad_token_id,
-    #     number_of_layers=2,
-    #     dropout=0.2,
-    #     bidirectional=True,
+    #     number_of_layers=LstmConfig.number_of_layers,
+    #     dropout=LstmConfig.dropout,
+    #     bidirectional=LstmConfig.bidirectional,
     # )
+
+    # encoder = FrozenDnabert2Encoder(hidden_dimension=DnabertConfig.hidden_dimension)
 
     encoder = HyenaEncoder(
         vocabulary_size=dataset.tokenizer.vocab_size,
-        embedding_dimension=128,
-        hidden_dimension=256,
+        embedding_dimension=HyenaConfig.embedding_dimension,
+        hidden_dimension=HyenaConfig.hidden_dimension,
         padding_id=dataset.tokenizer.pad_token_id,
-        number_of_layers=2,
-        dropout=0.2,
+        number_of_layers=HyenaConfig.number_of_layers,
+        dropout=HyenaConfig.dropout,
     )
 
     classification_model = ClassificationModel(
@@ -122,11 +122,6 @@ def main() -> None:
 
     triplet_train_dataset = Subset(triplet_dataset, range(768, len(triplet_dataset)))
     triplet_valid_dataset = Subset(triplet_dataset, range(768))
-
-    # model = ClassificationModel(
-    #     FrozenDnabert2Encoder(hidden_dimension=768),
-    #     number_of_classes=len(label_columns),
-    # )
 
     ColoredLogger.info(
         f"Training {classification_model.encoder.__class__.__name__} model"
@@ -184,14 +179,9 @@ def main() -> None:
     )
     trainer.fit()
 
-    # Save the model as safetensors
-    # Check if directory exists
-    Path("temp/models").mkdir(parents=True, exist_ok=True)
-    Path("temp/history").mkdir(parents=True, exist_ok=True)
-
     torch.save(
         classification_model.state_dict(),
-        f"temp/models/{classification_model.encoder.__class__.__name__}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pt",
+        f"temp/checkpoints/{classification_model.encoder.__class__.__name__}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pt",
     )
 
     ColoredLogger.info("Training complete")
@@ -201,7 +191,7 @@ def main() -> None:
     history_df = pl.DataFrame(history)
     fig = px.line(history_df, y=history_df.columns, title="Training History")
     fig.write_html(
-        f"temp/history/{classification_model.encoder.__class__.__name__}.html"
+        f"temp/reports/{classification_model.encoder.__class__.__name__}.html"
     )
 
 
