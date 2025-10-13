@@ -5,6 +5,7 @@ from Bio import SeqIO
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from Bio.Seq import Seq
+
 # Mru cache could be used for caching sequences if needed
 
 
@@ -187,7 +188,6 @@ class FastaSliceSource(SequenceDataSource):
         end_column: str,
         orientation_column: Optional[str] = None,
         sequence_column: str = "sequence",
-        cache_size: int = 128,
     ):
         self.directory = directory
         self.metadata = metadata
@@ -203,14 +203,25 @@ class FastaSliceSource(SequenceDataSource):
             else pl.read_csv(metadata)
         )
 
+        if self.key_column not in self.df.columns:
+            raise ValueError(f"Key column {self.key_column} not found in metadata.")
+
+        if self.start_column not in self.df.columns:
+            raise ValueError(f"Start column {self.start_column} not found in metadata.")
+
+        if self.end_column not in self.df.columns:
+            raise ValueError(f"End column {self.end_column} not found in metadata.")
+
         self._fasta_map = {p.stem: p for p in self.directory.glob("*.fasta")}
-        
-        self._load_sequence = lru_cache(maxsize=cache_size)(self._load_sequence_uncached)
+
+    @lru_cache(maxsize=32)
+    def _load_sequence(self, key: str) -> Seq:
+        return self._load_sequence_uncached(key)
 
     def _load_sequence_uncached(self, key: str) -> Seq:
         """
         Load a full genome sequence from FASTA.
-        
+
         :param str key: The key corresponding to the FASTA file.
         :return str: The full genome sequence as a string.
         """
@@ -220,58 +231,58 @@ class FastaSliceSource(SequenceDataSource):
 
         with open(fasta_path) as handle:
             return [rec.seq for rec in SeqIO.parse(handle, "fasta")][0]
-        
+
     @property
     def height(self) -> int:
         return self.df.height
-    
+
     def retrieve(self, index: int) -> dict:
         row = self.df.row(index, named=True)
         key = row[self.key_column]
         start = row[self.start_column]
         end = row[self.end_column]
         orientation = row.get(self.orientation_column, "+")
-        
+
         if key not in self._fasta_map:
-            return {}
-        try:
-            full_sequence = self._load_sequence(key)
-        except FileNotFoundError:
-            return {}
+            raise FileNotFoundError(f"No FASTA found for {key}")
+
+        full_sequence = self._load_sequence(key)
 
         if start is None and end is None:
             sequence = full_sequence
-        
+        else:
+            sequence = full_sequence[start:end]
+
         if orientation == "-":
             sequence = sequence.reverse_complement()
 
         row[self.sequence_column] = str(sequence)
         return row
-    
+
     def batch(self, indices: list[int]) -> list[dict]:
         subset = self.df[indices]
         groups = subset.partition_by(self.key_column, as_dict=True)
-        
+
         results = []
         for key, group in groups.items():
             if key not in self._fasta_map:
                 continue
-            
+
             full_sequence = self._load_sequence(key)
-            
+
             for row in group.rows(named=True):
                 start = row[self.start_column]
                 end = row[self.end_column]
                 orientation = row.get(self.orientation_column, "+")
-                
+
                 if start is None and end is None:
                     sequence = full_sequence
                 else:
                     sequence = full_sequence[start:end]
-                
+
                 if orientation == "-":
                     sequence = sequence.reverse_complement()
-                
+
                 row[self.sequence_column] = str(sequence)
                 results.append(row)
         assert len(results) == len(indices)
