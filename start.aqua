@@ -21,22 +21,22 @@ cd $HOME/Mainframe/TARP
 if [ ! -d "./.venv" ]; then
     # Create a virtual environment if it does not exist
     python -m venv ./.venv
-
+    
     # Activate the virtual environment
     source ./.venv/bin/activate
-
+    
     # Upgrade pip in the virtual environment
     python -m pip install --upgrade pip
-
+    
     # Install the required packages
     pip install -e . --extra-index-url https://download.pytorch.org/whl/cu128
-
+    
     # Uninstall triton as old versions cause issues
     pip uninstall -y triton
-
+    
     # Deactivate the virtual environment
     deactivate
-
+    
     echo "Virtual environment created and packages installed."
 else
     echo "Virtual environment already exists."

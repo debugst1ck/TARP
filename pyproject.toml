@@ -2,30 +2,28 @@
 name = "tarp"
 version = "0.1.0"
 description = "TARP - A deep learning tool for predicting antimicrobial resistance from nucleotide sequences"
-authors = [
-    { name = "Joel Jacob", email = "j7.jacob@hdr.qut.edu.au" }
-]
+authors = [{ name = "Joel Jacob", email = "j7.jacob@hdr.qut.edu.au" }]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 
 dependencies = [
-    "pandas",
-    "polars",
-    "numpy",
-    "scikit-learn",
-    "torch",
-    "transformers",
-    "tokenizers",
-    "tqdm",
-    "plotly",
-    "pyarrow",
-    "scipy",
-    "einops",
-    "biopython",
-    "safetensors",
-    "ipykernel",
-    "nbformat",
+    "pandas",       # Backwards compatibility for users who haven't switched to polars
+    "polars",       # Data manipulation
+    "numpy",        # Numerical operations
+    "scikit-learn", # Machine learning utilities
+    "torch",        # Deep learning
+    "transformers", # Pre-trained models and tokenizers
+    "tokenizers",   # Efficient tokenization
+    "tqdm",         # Progress bars
+    "plotly",       # Interactive visualizations
+    "pyarrow",      # Efficient data storage and retrieval
+    "scipy",        # Scientific computing
+    "einops",       # Tensor operations
+    "biopython",    # Biological sequence handling
+    "safetensors",  # Safe and efficient model storage
+    "ipykernel",    # Jupyter notebook support
+    "nbformat",     # Jupyter notebook support
 ]
 
 [project.scripts]
@@ -41,17 +39,8 @@ where = ["src"]
 exclude = ["temp*", "tests*"]
 
 [project.optional-dependencies]
-dev = [
-    "black",
-    "ruff",
-    "pytest",
-]
-docs = [
-    "sphinx",
-    "sphinx-rtd-theme",
-    "sphinx-autodoc-typehints",
-    "myst-parser",
-]
+dev = ["black", "ruff", "pytest"]
+docs = ["sphinx", "sphinx-rtd-theme", "sphinx-autodoc-typehints", "myst-parser"]
 
 [build-system]
 requires = ["setuptools", "wheel"]
