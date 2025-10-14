@@ -35,6 +35,8 @@ from tarp.services.preprocessing.augumentation import (
 
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 from tarp.model.backbone.untrained.hyena import HyenaEncoder
+from tarp.model.backbone.untrained.lstm import LstmEncoder
+from tarp.model.backbone.pretrained.dnabert2 import FrozenDnabert2Encoder
 from tarp.model.finetuning.classification import ClassificationModel
 
 from tarp.config import LstmConfig, HyenaConfig, DnabertConfig
@@ -95,16 +97,16 @@ def main() -> None:
     #     bidirectional=LstmConfig.bidirectional,
     # )
 
-    # encoder = FrozenDnabert2Encoder(hidden_dimension=DnabertConfig.hidden_dimension)
+    encoder = FrozenDnabert2Encoder(hidden_dimension=DnabertConfig.hidden_dimension)
 
-    encoder = HyenaEncoder(
-        vocabulary_size=dataset.tokenizer.vocab_size,
-        embedding_dimension=HyenaConfig.embedding_dimension,
-        hidden_dimension=HyenaConfig.hidden_dimension,
-        padding_id=dataset.tokenizer.pad_token_id,
-        number_of_layers=HyenaConfig.number_of_layers,
-        dropout=HyenaConfig.dropout,
-    )
+    # encoder = HyenaEncoder(
+    #     vocabulary_size=dataset.tokenizer.vocab_size,
+    #     embedding_dimension=HyenaConfig.embedding_dimension,
+    #     hidden_dimension=HyenaConfig.hidden_dimension,
+    #     padding_id=dataset.tokenizer.pad_token_id,
+    #     number_of_layers=HyenaConfig.number_of_layers,
+    #     dropout=HyenaConfig.dropout,
+    # )
 
     classification_model = ClassificationModel(
         encoder=encoder,
