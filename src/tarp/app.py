@@ -15,7 +15,6 @@ from tarp.cli.logging.colored import ColoredLogger
 from tarp.services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
 from tarp.services.datasource.sequence import (
     TabularSequenceSource,
-    CombinationSource,
     FastaSliceSource,
 )
 from tarp.services.datasets.classification.multilabel import (
@@ -45,7 +44,7 @@ def main() -> None:
     ColoredLogger.info("App started")
 
     # Set seed for reproducibility
-    SEED = establish_random_seed(42)
+    SEED = establish_random_seed(69420)  # FuNnY NuMbEr :D
     ColoredLogger.info(f"Random seed set to {SEED}")
 
     label_columns = (
@@ -54,22 +53,16 @@ def main() -> None:
 
     # Create dataset
     dataset = MultiLabelClassificationDataset(
-        CombinationSource(
-            [
-                TabularSequenceSource(
-                    source=Path("temp/data/processed/card_amr.parquet")
-                ),
-                FastaSliceSource(
-                    directory=Path("temp/data/external/sequences"),
-                    metadata=Path(
-                        "temp/data/processed/non_amr_genes_10000.parquet"
-                    ),
-                    key_column="genomic_nucleotide_accession.version",
-                    start_column="start_position_on_the_genomic_accession",
-                    end_column="end_position_on_the_genomic_accession",
-                    orientation_column="orientation",
-                ),
-            ]
+        (
+            TabularSequenceSource(source=Path("temp/data/processed/card_amr.parquet"))
+            & FastaSliceSource(
+                directory=Path("temp/data/external/sequences"),
+                metadata=Path("temp/data/processed/non_amr_genes_10000.parquet"),
+                key_column="genomic_nucleotide_accession.version",
+                start_column="start_position_on_the_genomic_accession",
+                end_column="end_position_on_the_genomic_accession",
+                orientation_column="orientation",
+            )
         ),
         Dnabert2Tokenizer(),
         sequence_column="sequence",
@@ -84,7 +77,9 @@ def main() -> None:
         ),
     )
 
-    triplet_dataset = MultilabelOfflineTripletDataset(base_dataset=dataset, label_cache=Path("temp/data/interim/labels_cache.parquet"))
+    triplet_dataset = MultilabelOfflineTripletDataset(
+        base_dataset=dataset, label_cache=Path("temp/data/interim/labels_cache.parquet")
+    )
 
     # Make a subset of the dataset for quick testing
     train_dataset = Subset(dataset, range(768, len(dataset)))

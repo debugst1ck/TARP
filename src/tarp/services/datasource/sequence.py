@@ -45,6 +45,9 @@ class SequenceDataSource(ABC):
         """
         return [self.retrieve(i) for i in indices]
 
+    def __and__(self, other: "SequenceDataSource") -> "CombinationSource":
+        return CombinationSource([self, other])
+
 
 class TabularSequenceSource(SequenceDataSource):
     """
