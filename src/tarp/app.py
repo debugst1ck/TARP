@@ -36,10 +36,10 @@ from tarp.services.preprocessing.augumentation import (
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 from tarp.model.backbone.untrained.hyena import HyenaEncoder
 from tarp.model.backbone.untrained.lstm import LstmEncoder
-from tarp.model.backbone.pretrained.dnabert2 import FrozenDnabert2Encoder
+from tarp.model.backbone.pretrained.dnabert2 import FrozenDnabert2Encoder, Dnabert2Encoder
 from tarp.model.finetuning.classification import ClassificationModel
 
-from tarp.config import LstmConfig, HyenaConfig, DnabertConfig
+from tarp.config import LstmConfig, HyenaConfig, Dnabert2Config
 
 
 def main() -> None:
@@ -97,7 +97,7 @@ def main() -> None:
     #     bidirectional=LstmConfig.bidirectional,
     # )
 
-    encoder = FrozenDnabert2Encoder(hidden_dimension=DnabertConfig.hidden_dimension)
+    encoder = Dnabert2Encoder(hidden_dimension=Dnabert2Config.hidden_dimension)
 
     # encoder = HyenaEncoder(
     #     vocabulary_size=dataset.tokenizer.vocab_size,
@@ -150,7 +150,7 @@ def main() -> None:
         optimizer=optimizer_triplet,
         scheduler=ReduceLROnPlateau(optimizer_triplet, mode="min", patience=3),
         device=device,
-        epochs=2,
+        epochs=10,
         num_workers=2,
     )
     metric_learning_trainer.fit()
@@ -165,7 +165,7 @@ def main() -> None:
         optimizer=optimizer_classification,
         scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
         device=device,
-        epochs=20,
+        epochs=50,
         num_workers=4,
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
