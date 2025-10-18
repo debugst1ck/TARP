@@ -4,7 +4,7 @@ import torch
 
 from tarp.services.datasource.sequence import SequenceDataSource
 from tarp.services.tokenizers import Tokenizer
-from tarp.services.preprocessing.augumentation import NoAugmentation, AugmentationTechnique
+from tarp.services.preprocessing.augmentation import NoAugmentation, AugmentationTechnique
 
 
 class SequenceDataset(Dataset):

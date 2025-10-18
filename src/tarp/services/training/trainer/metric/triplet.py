@@ -7,8 +7,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, LRScheduler
 from tqdm import tqdm
 from typing import Optional
 
-from tarp.services.training import Trainer
-from tarp.services.evaluation import Extremeum
+from tarp.services.training.trainer import Trainer
+from tarp.services.evaluation import Extremum
 from tarp.cli.logging.colored import ColoredLogger
 
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
@@ -28,7 +28,7 @@ class TripletMetricTrainer(Trainer):
         margin: float = 1.0,
         num_workers: int = 0,
         criterion: Optional[nn.Module] = None,
-        monitor_metric: str = "validation_loss",
+        accumulation_steps: int = 1,
     ):
         super().__init__(
             model=model,
@@ -41,7 +41,7 @@ class TripletMetricTrainer(Trainer):
             epochs=epochs,
             max_grad_norm=max_grad_norm,
             num_workers=num_workers,
-            monitor_metric=monitor_metric,
+            accumulation_steps=accumulation_steps,
         )
 
         # Loss function
@@ -52,18 +52,18 @@ class TripletMetricTrainer(Trainer):
     def _move_item_to_device(
         self, item: dict[str, Tensor]
     ) -> tuple[Tensor, Optional[Tensor]]:
-        sequence = item["sequence"].to(self.device)
+        sequence = item["sequence"].to(self.context.device)
         mask = item.get("mask", None)
         if mask is not None:
-            mask = mask.to(self.device)
+            mask = mask.to(self.context.device)
         return sequence, mask
 
-    def training_step(self, batch: dict[str, Tensor]) -> Tensor:
+    def training_step(self, batch: dict[str, Tensor]) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
         anchor, anchor_mask = self._move_item_to_device(batch["anchor"])
         positive, positive_mask = self._move_item_to_device(batch["positive"])
         negative, negative_mask = self._move_item_to_device(batch["negative"])
 
-        anchor_embedding, positive_embedding, negative_embedding = self.model(
+        anchor_embedding, positive_embedding, negative_embedding = self.context.model(
             anchor,
             positive,
             negative,
@@ -73,7 +73,15 @@ class TripletMetricTrainer(Trainer):
         )
 
         loss = self.criterion(anchor_embedding, positive_embedding, negative_embedding)
-        return loss
+        return (
+            loss,
+            (
+                anchor_embedding.detach().cpu(),
+                positive_embedding.detach().cpu(),
+                negative_embedding.detach().cpu(),
+            ),
+            None,
+        )
 
     def validation_step(
         self, batch: dict[str, Tensor]
@@ -82,7 +90,7 @@ class TripletMetricTrainer(Trainer):
         positive, positive_mask = self._move_item_to_device(batch["positive"])
         negative, negative_mask = self._move_item_to_device(batch["negative"])
 
-        anchor_embedding, positive_embedding, negative_embedding = self.model(
+        anchor_embedding, positive_embedding, negative_embedding = self.context.model(
             anchor,
             positive,
             negative,

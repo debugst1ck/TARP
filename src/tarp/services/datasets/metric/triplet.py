@@ -12,7 +12,7 @@ from pathlib import Path
 import polars as pl
 
 
-class MultilabelOfflineTripletDataset(Dataset):
+class MultiLabelOfflineTripletDataset(Dataset):
     """
     Dataset for generating triplets (anchor, positive, negative) from a multi-label classification dataset.
 

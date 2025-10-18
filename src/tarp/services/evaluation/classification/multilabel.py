@@ -7,7 +7,7 @@ from typing import Union
 from tarp.cli.logging.colored import ColoredLogger
 
 
-class MultilabelMetrics:
+class MultiLabelMetrics:
     """
     Computes multiple metrics for multilabel classification in one call.
     """
@@ -34,11 +34,13 @@ class MultilabelMetrics:
         """Binarize probabilities at threshold."""
         if not self.logits:
             return logits
-        probs = self._predict_probability(logits)
-        
+        probabilities = self._predict_probability(logits)
+
         if isinstance(self.threshold, Tensor):
             if self.threshold.ndim == 1:  # shape [num_classes]
-                threshold_tensor = self.threshold.to(probs.device).unsqueeze(0)  # [1, num_classes]
+                threshold_tensor = self.threshold.to(probabilities.device).unsqueeze(
+                    0
+                )  # [1, num_classes]
             else:
                 raise ValueError(
                     f"Threshold tensor must be 1D [num_classes], got shape {self.threshold.shape}"
@@ -46,31 +48,40 @@ class MultilabelMetrics:
         else:
             threshold_tensor = self.threshold
 
-        return (probs > threshold_tensor).int()
-    
+        return (probabilities > threshold_tensor).int()
+
     # --- individual metric implementations ---
     def _precision(self, logits: Tensor, targets: Tensor) -> float:
-        preds = self._predict(logits)
+        predictions = self._predict(logits)
         return sklearn.metrics.precision_score(
-            targets.cpu().numpy(), preds.cpu().numpy(), average="micro", zero_division=0
+            targets.cpu().numpy(),
+            predictions.cpu().numpy(),
+            average="micro",
+            zero_division=0,
         )
 
     def _recall(self, logits: Tensor, targets: Tensor) -> float:
-        preds = self._predict(logits)
+        predictions = self._predict(logits)
         return sklearn.metrics.recall_score(
-            targets.cpu().numpy(), preds.cpu().numpy(), average="micro", zero_division=0
+            targets.cpu().numpy(),
+            predictions.cpu().numpy(),
+            average="micro",
+            zero_division=0,
         )
 
     def _f1(self, logits: Tensor, targets: Tensor) -> float:
-        preds = self._predict(logits)
+        predictions = self._predict(logits)
         return sklearn.metrics.f1_score(
-            targets.cpu().numpy(), preds.cpu().numpy(), average="micro", zero_division=0
+            targets.cpu().numpy(),
+            predictions.cpu().numpy(),
+            average="micro",
+            zero_division=0,
         )
 
     def _subset_accuracy(self, logits: Tensor, targets: Tensor) -> float:
-        preds = self._predict(logits)
+        predictions = self._predict(logits)
         return sklearn.metrics.accuracy_score(
-            targets.cpu().numpy(), preds.cpu().numpy()
+            targets.cpu().numpy(), predictions.cpu().numpy()
         )
 
     def _roc_auc(self, logits: Tensor, targets: Tensor) -> Optional[float]:
@@ -98,17 +109,17 @@ class MultilabelMetrics:
             ColoredLogger.warning(
                 f"Skipping {skipped} invalid classes (all-zeros or all-ones) for ROC AUC."
             )
-            
+
         return sklearn.metrics.roc_auc_score(
             y_true[:, valid_classes], probs[:, valid_classes], average="macro"
         )
-    
+
     def _hamming_loss(self, logits: Tensor, targets: Tensor) -> float:
-        preds = self._predict(logits)
+        predictions = self._predict(logits)
         return sklearn.metrics.hamming_loss(
-            targets.cpu().numpy(), preds.cpu().numpy()
+            targets.cpu().numpy(), predictions.cpu().numpy()
         )
-    
+
     # --- public interface ---
     def compute(
         self, logits: Union[Tensor, list[Tensor]], targets: Union[Tensor, list[Tensor]]

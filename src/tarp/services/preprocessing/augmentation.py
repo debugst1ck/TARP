@@ -5,10 +5,12 @@ from array import array
 import sys
 from typing import Optional
 
+from abc import ABC, abstractmethod
+
 # Base Augmentation Technique
+class AugmentationTechnique(ABC):
 
-
-class AugmentationTechnique:
+    @abstractmethod
     def apply(self, sequence: str) -> str:
         """
         Applies the augmentation technique to the input sequence.
@@ -34,7 +36,7 @@ class CombinationTechnique(AugmentationTechnique):
 
 class ReverseComplement(AugmentationTechnique):
     def __init__(self, complement_rate: float = 1.0):
-        self.complementation_rate = complement_rate
+        self.complement_rate = complement_rate
 
     def apply(self, sequence: str) -> str:
         """
@@ -44,7 +46,7 @@ class ReverseComplement(AugmentationTechnique):
         :param str sequence: The input sequence to augment.
         :return str: The augmented sequence.
         """
-        if random.random() > self.complementation_rate:
+        if random.random() > self.complement_rate:
             return sequence
         bio_seq = Seq(sequence)
         return str(bio_seq.reverse_complement())

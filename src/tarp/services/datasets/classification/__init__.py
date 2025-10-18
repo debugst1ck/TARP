@@ -1,7 +1,7 @@
 from torch import Tensor
 import torch
 
-from tarp.services.preprocessing.augumentation import NoAugmentation, AugmentationTechnique
+from tarp.services.preprocessing.augmentation import NoAugmentation, AugmentationTechnique
 from tarp.services.datasets import SequenceDataset
 from tarp.services.datasource.sequence import SequenceDataSource
 from tarp.services.tokenizers import Tokenizer

@@ -3,7 +3,7 @@ from torch import Tensor
 from tarp.services.datasource.sequence import SequenceDataSource
 from tarp.services.tokenizers import Tokenizer
 from tarp.services.datasets.classification import ClassificationDataset
-from tarp.services.preprocessing.augumentation import NoAugmentation, AugmentationTechnique
+from tarp.services.preprocessing.augmentation import NoAugmentation, AugmentationTechnique
 
 class MultiLabelClassificationDataset(ClassificationDataset):
     def __init__(
@@ -13,7 +13,7 @@ class MultiLabelClassificationDataset(ClassificationDataset):
         sequence_column: str,
         label_columns: list[str],
         maximum_sequence_length: int,
-        augumentation: AugmentationTechnique = NoAugmentation(),
+        augmentation: AugmentationTechnique = NoAugmentation(),
     ):
         super().__init__(
             data_source,
@@ -21,7 +21,7 @@ class MultiLabelClassificationDataset(ClassificationDataset):
             sequence_column,
             label_columns,
             maximum_sequence_length,
-            augumentation,
+            augmentation,
         )
 
     def __getitem__(self, index: int) -> dict[str, Tensor]:

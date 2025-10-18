@@ -20,13 +20,13 @@ from tarp.services.datasource.sequence import (
 from tarp.services.datasets.classification.multilabel import (
     MultiLabelClassificationDataset,
 )
-from tarp.services.datasets.metric.triplet import MultilabelOfflineTripletDataset
-from tarp.services.training.classification.multilabel import (
+from tarp.services.datasets.metric.triplet import MultiLabelOfflineTripletDataset
+from tarp.services.training.trainer.classification.multilabel import (
     MultiLabelClassificationTrainer,
 )
 from tarp.services.evaluation.losses.multilabel import AsymmetricFocalLoss
-from tarp.services.training.metric.triplet import TripletMetricTrainer
-from tarp.services.preprocessing.augumentation import (
+from tarp.services.training.trainer.metric.triplet import TripletMetricTrainer
+from tarp.services.preprocessing.augmentation import (
     CombinationTechnique,
     RandomMutation,
     InsertionDeletion,
@@ -36,10 +36,15 @@ from tarp.services.preprocessing.augumentation import (
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 from tarp.model.backbone.untrained.hyena import HyenaEncoder
 from tarp.model.backbone.untrained.lstm import LstmEncoder
-from tarp.model.backbone.pretrained.dnabert2 import FrozenDnabert2Encoder, Dnabert2Encoder
+from tarp.model.backbone.pretrained.dnabert2 import (
+    FrozenDnabert2Encoder,
+    Dnabert2Encoder,
+)
 from tarp.model.finetuning.classification import ClassificationModel
 
 from tarp.config import LstmConfig, HyenaConfig, Dnabert2Config
+
+from sklearn.model_selection import train_test_split
 
 
 def main() -> None:
@@ -70,7 +75,7 @@ def main() -> None:
         sequence_column="sequence",
         label_columns=label_columns,
         maximum_sequence_length=512,
-        augumentation=CombinationTechnique(
+        augmentation=CombinationTechnique(
             [
                 RandomMutation(),
                 InsertionDeletion(),
@@ -79,13 +84,22 @@ def main() -> None:
         ),
     )
 
-    triplet_dataset = MultilabelOfflineTripletDataset(
-        base_dataset=dataset, label_cache=Path("temp/data/interim/labels_cache.parquet")
+    triplet_dataset = MultiLabelOfflineTripletDataset(
+        base_dataset=dataset, label_cache=Path("temp/data/cache/labels_cache.parquet")
     )
 
-    # Make a subset of the dataset for quick testing
-    train_dataset = Subset(dataset, range(768, len(dataset)))
-    valid_dataset = Subset(dataset, range(768))
+    # Make a subset of the dataset for quick testing    
+    indices = list(range(len(dataset)))
+    train_indices, temp_indices = train_test_split(
+        indices, test_size=0.2, random_state=SEED
+    )
+    valid_indices, test_indices = train_test_split(
+        temp_indices, test_size=0.5, random_state=SEED
+    )
+    train_dataset = Subset(dataset, train_indices)
+    valid_dataset = Subset(dataset, valid_indices)
+    # test_dataset = Subset(dataset, test_indices)
+    
 
     # encoder = LstmEncoder(
     #     vocabulary_size=dataset.tokenizer.vocab_size,
@@ -97,16 +111,16 @@ def main() -> None:
     #     bidirectional=LstmConfig.bidirectional,
     # )
 
-    encoder = Dnabert2Encoder(hidden_dimension=Dnabert2Config.hidden_dimension)
+    # encoder = FrozenDnabert2Encoder(hidden_dimension=Dnabert2Config.hidden_dimension)
 
-    # encoder = HyenaEncoder(
-    #     vocabulary_size=dataset.tokenizer.vocab_size,
-    #     embedding_dimension=HyenaConfig.embedding_dimension,
-    #     hidden_dimension=HyenaConfig.hidden_dimension,
-    #     padding_id=dataset.tokenizer.pad_token_id,
-    #     number_of_layers=HyenaConfig.number_of_layers,
-    #     dropout=HyenaConfig.dropout,
-    # )
+    encoder = HyenaEncoder(
+        vocabulary_size=dataset.tokenizer.vocab_size,
+        embedding_dimension=HyenaConfig.embedding_dimension,
+        hidden_dimension=HyenaConfig.hidden_dimension,
+        padding_id=dataset.tokenizer.pad_token_id,
+        number_of_layers=HyenaConfig.number_of_layers,
+        dropout=HyenaConfig.dropout,
+    )
 
     classification_model = ClassificationModel(
         encoder=encoder,
@@ -117,8 +131,9 @@ def main() -> None:
         encoder=encoder,
     )
 
-    triplet_train_dataset = Subset(triplet_dataset, range(768, len(triplet_dataset)))
-    triplet_valid_dataset = Subset(triplet_dataset, range(768))
+    triplet_train_dataset = Subset(triplet_dataset, train_indices)
+    triplet_valid_dataset = Subset(triplet_dataset, valid_indices)
+    # triplet_test_dataset = Subset(triplet_dataset, test_indices)
 
     ColoredLogger.info(
         f"Training {classification_model.encoder.__class__.__name__} model"
@@ -137,10 +152,21 @@ def main() -> None:
         ColoredLogger.warning("Using CPU for training, this may be slow")
         device = torch.device("cpu")
 
+    encoder_params = []
+    head_params = []
+    for name, p in classification_model.named_parameters():
+        if "encoder" in name:
+            encoder_params.append(p)
+        else:
+            head_params.append(p)
+
     optimizer_classification = AdamW(
-        classification_model.parameters(), lr=0.001, weight_decay=1e-2
+        [
+            {"params": encoder_params, "lr": 2e-3, "weight_decay": 1e-2},
+            {"params": head_params, "lr": 1e-3, "weight_decay": 1e-2},
+        ]
     )
-    optimizer_triplet = AdamW(triplet_model.parameters(), lr=0.001, weight_decay=1e-2)
+    optimizer_triplet = AdamW(triplet_model.parameters(), lr=1e-3, weight_decay=1e-2)
 
     ColoredLogger.info("Training model with triplet loss first")
     metric_learning_trainer = TripletMetricTrainer(
@@ -150,8 +176,10 @@ def main() -> None:
         optimizer=optimizer_triplet,
         scheduler=ReduceLROnPlateau(optimizer_triplet, mode="min", patience=3),
         device=device,
-        epochs=10,
-        num_workers=2,
+        epochs=5,
+        num_workers=4,
+        batch_size=32,
+        accumulation_steps=4,
     )
     metric_learning_trainer.fit()
 
@@ -165,7 +193,7 @@ def main() -> None:
         optimizer=optimizer_classification,
         scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
         device=device,
-        epochs=50,
+        epochs=10,
         num_workers=4,
         batch_size=32,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
@@ -173,6 +201,25 @@ def main() -> None:
             gamma_pos=2,
             gamma_neg=2,  # class_weights=pos_weights.to(device)
         ),
+    )
+    # trainer.fit()
+    
+    trainer = MultiLabelClassificationTrainer(
+        model=classification_model,
+        train_dataset=train_dataset,
+        valid_dataset=valid_dataset,
+        optimizer=optimizer_classification,
+        scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
+        device=device,
+        epochs=10,
+        num_workers=4,
+        batch_size=32,
+        # criterion=FocalLoss(alpha=alphas, gamma=2.0),
+        criterion=AsymmetricFocalLoss(
+            gamma_pos=2,
+            gamma_neg=2,  # class_weights=pos_weights.to(device)
+        ),
+        accumulation_steps=8,  # Gradient accumulation to simulate larger batch size
     )
     trainer.fit()
 
@@ -184,7 +231,7 @@ def main() -> None:
     ColoredLogger.info("Training complete")
 
     # Visualize training history
-    history = trainer.history  # List of dicts
+    history = trainer.context.state.history  # List of dicts
     history_df = pl.DataFrame(history)
     fig = px.line(history_df, y=history_df.columns, title="Training History")
     fig.write_html(

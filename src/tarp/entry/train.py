@@ -7,7 +7,7 @@ from tarp.services.datasource.sequence import (
     CombinationSource,
     FastaSliceSource,
 )
-from tarp.services.preprocessing.augumentation import (
+from tarp.services.preprocessing.augmentation import (
     CombinationTechnique,
     RandomMutation,
     InsertionDeletion,
@@ -15,7 +15,7 @@ from tarp.services.preprocessing.augumentation import (
 )
 
 from tarp.services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
-from tarp.services.preprocessing.augumentation import (
+from tarp.services.preprocessing.augmentation import (
     CombinationTechnique,
     RandomMutation,
     InsertionDeletion,
@@ -53,7 +53,7 @@ def main():
         sequence_column="sequence",
         label_columns=label_columns,
         maximum_sequence_length=512,
-        augumentation=CombinationTechnique(
+        augmentation=CombinationTechnique(
             [
                 RandomMutation(),
                 InsertionDeletion(),
