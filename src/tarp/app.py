@@ -178,7 +178,7 @@ def main() -> None:
         device=device,
         epochs=5,
         num_workers=4,
-        batch_size=32,
+        batch_size=64,
         accumulation_steps=4,
     )
     metric_learning_trainer.fit()
@@ -186,22 +186,23 @@ def main() -> None:
     classification_model.encoder.load_state_dict(triplet_model.encoder.state_dict())
 
     ColoredLogger.info("Training model with multi-label classification loss")
-    trainer = MultiLabelClassificationTrainer(
-        model=classification_model,
-        train_dataset=train_dataset,
-        valid_dataset=valid_dataset,
-        optimizer=optimizer_classification,
-        scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
-        device=device,
-        epochs=10,
-        num_workers=4,
-        batch_size=32,
-        # criterion=FocalLoss(alpha=alphas, gamma=2.0),
-        criterion=AsymmetricFocalLoss(
-            gamma_pos=2,
-            gamma_neg=2,  # class_weights=pos_weights.to(device)
-        ),
-    )
+    # trainer = MultiLabelClassificationTrainer(
+    #     model=classification_model,
+    #     train_dataset=train_dataset,
+    #     valid_dataset=valid_dataset,
+    #     optimizer=optimizer_classification,
+    #     scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
+    #     device=device,
+    #     epochs=10,
+    #     num_workers=4,
+    #     batch_size=32,
+    #     # criterion=FocalLoss(alpha=alphas, gamma=2.0),
+    #     criterion=AsymmetricFocalLoss(
+    #         gamma_pos=2,
+    #         gamma_neg=2,  # class_weights=pos_weights.to(device)
+    #     ),
+    #     accumulation_steps=8,  # Gradient accumulation to simulate larger batch size
+    # )
     # trainer.fit()
     
     trainer = MultiLabelClassificationTrainer(
@@ -213,13 +214,13 @@ def main() -> None:
         device=device,
         epochs=10,
         num_workers=4,
-        batch_size=32,
+        batch_size=64,
         # criterion=FocalLoss(alpha=alphas, gamma=2.0),
         criterion=AsymmetricFocalLoss(
             gamma_pos=2,
             gamma_neg=2,  # class_weights=pos_weights.to(device)
         ),
-        accumulation_steps=8,  # Gradient accumulation to simulate larger batch size
+        accumulation_steps=4,  # Gradient accumulation to simulate larger batch size
     )
     trainer.fit()
 

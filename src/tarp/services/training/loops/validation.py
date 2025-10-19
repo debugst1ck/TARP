@@ -2,8 +2,20 @@ from torch.utils.data import DataLoader
 from tarp.services.training.loops import Loop
 from tqdm import tqdm
 import torch
+from torch import Tensor
+from typing import Optional
 
 class ValidationLoop(Loop):
+    def step(
+        self, batch: dict[str, Tensor], optimize: bool = True
+    ) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
+        with torch.amp.autocast(
+            device_type=self.context.device.type,
+            enabled=self.context.use_amp,
+        ):
+            loss, predictions, expected = self.iteration(batch)
+        return loss, predictions, expected
+    
     def run(self, epoch: int, dataloader: DataLoader) -> dict[str, float]:
         self.context.model.eval()
         total_loss = 0.0
@@ -16,11 +28,7 @@ class ValidationLoop(Loop):
         )
         with torch.no_grad():
             for batch in loop:
-                with torch.amp.autocast(
-                    device_type=self.context.device.type,
-                    enabled=self.context.use_amp,
-                ):
-                    loss, predictions, expected = self.iteration(batch)
+                loss, predictions, expected = self.step(batch, optimize=False)
                 total_loss += loss.item()
                 if predictions is not None:
                     all_predictions.append(predictions)

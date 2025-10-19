@@ -7,14 +7,19 @@ import torch
 
 from typing import Optional
 
-from tarp.services.training.context import TrainerContext, TrainerState
+from tarp.services.training.context import TrainerContext
+from tarp.services.training.state import TrainerState
+from tarp.services.training.loops import Loop
 from tarp.services.training.loops.validation import ValidationLoop
 from tarp.services.training.loops.training import TrainingLoop
 from tarp.services.training.callbacks import Callback
-from tarp.services.evaluation import Extremum
 
 from tarp.cli.logging.colored import ColoredLogger
-from tarp.services.training.callbacks.monitoring import EarlyStopping, ReduceLearningRate
+from tarp.services.training.callbacks.monitoring import (
+    EarlyStopping,
+    ReduceLearningRate,
+)
+
 
 class Trainer(ABC):
     def __init__(
@@ -31,7 +36,11 @@ class Trainer(ABC):
         num_workers: int = 0,
         use_amp: bool = True,
         accumulation_steps: int = 1,
-        callbacks: list[Callback] = [EarlyStopping(5), ReduceLearningRate("validation_loss")],
+        callbacks: list[Callback] = [
+            EarlyStopping(5),
+            ReduceLearningRate("validation_loss"),
+        ],
+        shared: dict = {},
     ):
         """
         Base Trainer class.
@@ -62,8 +71,10 @@ class Trainer(ABC):
                 accumulation_steps=accumulation_steps,
                 use_amp=use_amp,
                 gradient_clipping_threshold=max_grad_norm,
+                shared=shared,
             )
         )
+
         self.train_dataloader = DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -71,32 +82,35 @@ class Trainer(ABC):
             num_workers=num_workers,
             pin_memory=True,
         )
-        self.valid_dataloader = DataLoader(
+        self.validation_dataloader = DataLoader(
             valid_dataset,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
         )
+        
+        self.callbacks = callbacks
 
         self.training_loop = TrainingLoop(
             context=self.context,
             iteration=self.training_step,
+            backpropagation=self.backpropagation,
+            optimization=self.optimization,
+            callbacks=self.callbacks,
         )
-
         self.validation_loop = ValidationLoop(
             context=self.context,
             iteration=self.validation_step,
             evaluation=self.compute_metrics,
+            callbacks=self.callbacks,
         )
 
-        self.callbacks = callbacks
-
-    def _execute_callbacks(self, name: str) -> None:
+    def _execute_callbacks(self, hook_name: str, **kwargs):
         for callback in self.callbacks:
-            hook = getattr(callback, name, None)
+            hook = getattr(callback, hook_name, None)
             if callable(hook):
-                hook(self.context)
+                hook(self.context, **kwargs)
 
     @abstractmethod
     def training_step(
@@ -110,6 +124,7 @@ class Trainer(ABC):
         """
         raise NotImplementedError
 
+    @torch.no_grad()
     @abstractmethod
     def validation_step(
         self, batch: dict[str, Tensor]
@@ -134,17 +149,40 @@ class Trainer(ABC):
         """
         return {}
 
+    def backpropagation(self, loss: Tensor) -> None:
+        self.context.scaler.scale(loss).backward()
+
+    def optimization(self) -> None:
+        self.context.scaler.unscale_(self.context.optimizer)
+        if self.context.gradient_clipping_threshold > 0:
+            torch.nn.utils.clip_grad_norm_(
+                self.context.model.parameters(),
+                self.context.gradient_clipping_threshold,
+            )
+        self.context.scaler.step(self.context.optimizer)
+        self.context.scaler.update()
+        self.context.optimizer.zero_grad()
+
     def fit(self) -> None:
         self._execute_callbacks(Callback.on_training_start.__name__)
         for epoch in range(self.context.epochs):
             self._execute_callbacks(Callback.on_epoch_start.__name__)
+
+            # Training phase
+            training_metrics = self.training_loop.run(
+                epoch, self.train_dataloader
+            )
             
-            train_metrics = self.training_loop.run(epoch, self.train_dataloader)
-            self.context.record_current_history(train_metrics)
+            self.context.record_current_history(training_metrics)
             
-            validation_metrics = self.validation_loop.run(epoch, self.valid_dataloader)
+            # Validation phase
+            validation_metrics = self.validation_loop.run(
+                epoch, self.validation_dataloader
+            )
+            
             self.context.record_current_history(validation_metrics)
             
+
             for key, value in self.context.current_metrics.items():
                 ColoredLogger.debug(f"{key.title()}: {value:.4f}")
 

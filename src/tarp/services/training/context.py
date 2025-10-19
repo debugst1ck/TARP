@@ -4,35 +4,7 @@ from torch.optim.lr_scheduler import LRScheduler
 import torch
 from typing import Optional
 
-from tarp.services.evaluation import Extremum
-
-class TrainerState:
-    def __init__(
-        self,
-        model: nn.Module,
-        optimizer: Optimizer,
-        scheduler: Optional[LRScheduler],
-        device: torch.device,
-        scaler: Optional[torch.amp.GradScaler] = None,
-        epochs: int = 10,
-        accumulation_steps: int = 1,
-        use_amp: bool = True,
-        gradient_clipping_threshold: float = 1.0,
-    ):
-        self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.scaler = scaler
-        self.device = device
-        self.history: list[dict[str, float]] = [{} for _ in range(epochs)]
-        self.epochs = epochs
-        self.accumulation_steps = accumulation_steps
-        self.use_amp = use_amp
-        self.gradient_clipping_threshold = gradient_clipping_threshold
-
-        self.epoch = 0
-        self.stop_training = False
-
+from tarp.services.training.state import TrainerState
 
 class TrainerContext:
     def __init__(self, state: TrainerState):
@@ -93,3 +65,7 @@ class TrainerContext:
     @property
     def current_metrics(self) -> dict[str, float]:
         return self.state.history[self.epoch]
+    
+    @property
+    def shared(self) -> dict:
+        return self.state.shared
