@@ -16,7 +16,7 @@ class TrainingLoop(Loop):
             device_type=self.context.device.type,
             enabled=self.context.use_amp,
         ):
-            raw_loss, prediction, expected = self.iteration(batch)
+            raw_loss, prediction, expected = self.forward(batch)
             loss = raw_loss / self.context.accumulation_steps
         self.backpropagation(loss)
         if optimize:

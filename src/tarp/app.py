@@ -215,7 +215,6 @@ def main() -> None:
         epochs=10,
         num_workers=4,
         batch_size=64,
-        # criterion=FocalLoss(alpha=alphas, gamma=2.0),
         criterion=AsymmetricFocalLoss(
             gamma_pos=2,
             gamma_neg=2,  # class_weights=pos_weights.to(device)

@@ -13,7 +13,7 @@ class ValidationLoop(Loop):
             device_type=self.context.device.type,
             enabled=self.context.use_amp,
         ):
-            loss, predictions, expected = self.iteration(batch)
+            loss, predictions, expected = self.forward(batch)
         return loss, predictions, expected
     
     def run(self, epoch: int, dataloader: DataLoader) -> dict[str, float]:

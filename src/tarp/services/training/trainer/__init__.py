@@ -51,14 +51,14 @@ class Trainer(ABC):
         :param optimizer: The optimizer for training.
         :param scheduler: The learning rate scheduler.
         :param device: The device to run the training on.
-        :param batch_size: Batch size for DataLoader.
-        :param epochs: Number of training epochs.
-        :param max_grad_norm: Maximum gradient norm for clipping.
-        :param num_workers: Number of workers for DataLoader.
+        :param batch_size: The batch size for training and validation.
+        :param epochs: The number of training epochs.
+        :param max_grad_norm: The maximum gradient norm for clipping.
+        :param num_workers: The number of worker threads for data loading.
         :param use_amp: Whether to use automatic mixed precision.
-        :param monitor_metric: Metric to monitor for early stopping or checkpointing.
-        :param monitor_mode: Mode for monitoring metric (min or max).
-        :param accumulation_steps: Number of steps to accumulate gradients before updating weights.
+        :param accumulation_steps: Number of steps to accumulate gradients before updating.
+        :param callbacks: List of callback instances for training events.
+        :param shared: A shared dictionary for storing custom data across callbacks and training steps.
         """
         self.context = TrainerContext(
             TrainerState(
@@ -94,14 +94,14 @@ class Trainer(ABC):
 
         self.training_loop = TrainingLoop(
             context=self.context,
-            iteration=self.training_step,
+            forward=self.training_step,
             backpropagation=self.backpropagation,
             optimization=self.optimization,
             callbacks=self.callbacks,
         )
         self.validation_loop = ValidationLoop(
             context=self.context,
-            iteration=self.validation_step,
+            forward=self.validation_step,
             evaluation=self.compute_metrics,
             callbacks=self.callbacks,
         )
@@ -182,7 +182,6 @@ class Trainer(ABC):
             
             self.context.record_current_history(validation_metrics)
             
-
             for key, value in self.context.current_metrics.items():
                 ColoredLogger.debug(f"{key.title()}: {value:.4f}")
 

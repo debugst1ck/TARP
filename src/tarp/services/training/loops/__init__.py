@@ -12,7 +12,7 @@ class Loop(ABC):
     def __init__(
         self,
         context: Union[TrainerContext, list[TrainerContext]],
-        iteration: Callable[
+        forward: Callable[
             [dict[str, Tensor]], tuple[Tensor, Optional[Tensor], Optional[Tensor]]
         ],
         evaluation: Callable[
@@ -28,9 +28,11 @@ class Loop(ABC):
         :param context: TrainerContext providing access to trainer state.
         :param iteration: Function to perform a single iteration (training/validation step).
         :param evaluation: Function to compute metrics given predictions and expected values.
+        :param backpropagation: Function to perform backpropagation given a loss.
+        :param optimization: Function to perform optimization step.
         """
         self.context = context
-        self.iteration = iteration
+        self.forward = forward
         self.evaluation = evaluation
         self.backpropagation = backpropagation
         self.optimization = optimization
