@@ -7,6 +7,8 @@ from functools import lru_cache
 from Bio.Seq import Seq
 import torch
 
+from tarp.cli.logging.colored import ColoredLogger
+
 # Mru cache could be used for caching sequences if needed
 
 
@@ -43,7 +45,7 @@ class SequenceDataSource(ABC):
         """
         return [self.retrieve(i) for i in indices]
 
-    def __and__(self, other: "SequenceDataSource") -> "CombinationSource":
+    def __add__(self, other: "SequenceDataSource") -> "CombinationSource":
         return CombinationSource([self, other])
 
 
@@ -67,6 +69,10 @@ class TabularSequenceSource(SequenceDataSource):
         else:
             raise ValueError(f"Unsupported file type: {self.source.suffix}")
 
+        # Add index column if not present
+        if "index" not in self.dataframe.columns:
+            self.dataframe = self.dataframe.with_row_index("index")
+
     @property
     def height(self) -> int:
         if self.dataframe is not None:
@@ -80,7 +86,9 @@ class TabularSequenceSource(SequenceDataSource):
 
     def batch(self, indices: list[int]) -> list[dict]:
         if self.dataframe is not None:
-            return self.dataframe.rows(indices, named=True)
+            return self.dataframe.filter(pl.col("index").is_in(indices)).rows(
+                named=True
+            )
         return []
 
 
@@ -315,10 +323,10 @@ class FastaSliceSource(SequenceDataSource):
 
         results = []
         for key, group in groups.items():
-            if key not in self._fasta_map:
+            if key[0] not in self._fasta_map:
                 continue
 
-            full_sequence = self._load_sequence(key)
+            full_sequence = self._load_sequence(key[0])
 
             for row in group.rows(named=True):
                 start = row[self.start_column]
@@ -335,5 +343,9 @@ class FastaSliceSource(SequenceDataSource):
 
                 row[self.sequence_column] = str(sequence)
                 results.append(row)
-        assert len(results) == len(indices)
+        if not results.__len__() == len(indices):
+            ColoredLogger.warning(
+                f"Batch retrieval returned {len(results)} results, "
+                f"but {len(indices)} were requested."
+            )
         return results

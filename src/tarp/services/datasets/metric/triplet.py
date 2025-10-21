@@ -1,7 +1,7 @@
 from functools import lru_cache
 import torch
-from torch.utils.data import Dataset
 
+from tarp.services.datasets import SequenceDataset
 from tarp.services.datasets.classification.multilabel import (
     MultiLabelClassificationDataset,
 )
@@ -12,8 +12,10 @@ from pathlib import Path
 import polars as pl
 from torch import Tensor
 
+from typing import override
 
-class MultiLabelOfflineTripletDataset(Dataset):
+
+class MultiLabelOfflineTripletDataset(SequenceDataset):
     """
     Dataset for generating triplets (anchor, positive, negative) from a multi-label classification dataset.
 
@@ -27,7 +29,8 @@ class MultiLabelOfflineTripletDataset(Dataset):
         self, base_dataset: MultiLabelClassificationDataset, label_cache: Path = None
     ):
         self.base_dataset = base_dataset
-        if len(self.base_dataset) < 2:
+        self.data_source = base_dataset.data_source
+        if self.data_source.height < 2:
             raise ValueError("Base dataset must contain at least two samples.")
 
         expected_columns = base_dataset.label_columns
@@ -39,10 +42,8 @@ class MultiLabelOfflineTripletDataset(Dataset):
             df = pl.read_parquet(label_cache)
             cached_columns = df.columns
 
-            # ✅ Ensure column order and names match expected
-            if set(cached_columns) == set(expected_columns) and df.shape[0] == len(
-                self.base_dataset
-            ):
+            # Ensure column order and names match expected
+            if set(cached_columns) == set(expected_columns) and df.shape[0] == self.data_source.height:
                 # Reorder columns to match expected order
                 df = df.select(expected_columns)
                 self.labels = torch.tensor(df.to_numpy(), dtype=torch.float32)
@@ -52,7 +53,9 @@ class MultiLabelOfflineTripletDataset(Dataset):
             else:
                 ColoredLogger.warning(
                     f"Label cache mismatch — columns or size differ. "
-                    f"(cache columns: {cached_columns}, expected: {expected_columns})"
+                    f"Expected shape ({self.data_source.height}, {len(expected_columns)}), "
+                    f"found shape {df.shape}, column difference: {set(cached_columns) - set(expected_columns)}"
+                    
                 )
 
         # If cache missing or mismatched, recompute and save
@@ -73,9 +76,10 @@ class MultiLabelOfflineTripletDataset(Dataset):
                 else Path("temp/data/interim/labels_cache.parquet")
             )
             ColoredLogger.info(f"Saved labels to cache: {label_cache}")
-
+   
+    @override
     def process_row(self, index: int, row: dict) -> dict[str, dict[str, Tensor]]:
-        anchor_sample = self.base_dataset.process_row(index, row)
+        anchor_sample = self.base_dataset[index]
         anchor_labels = self.labels[index].unsqueeze(0)  # shape (1, num_labels)
 
         # Compute distances to all samples
@@ -94,26 +98,20 @@ class MultiLabelOfflineTripletDataset(Dataset):
 
         if overlap.any():
             # Find the hardest positive sample
-            pos_idx = distances.masked_fill(~overlap, float("inf")).argmin().item()
-            positive_sample = self.base_dataset.process_row(
-                pos_idx, self.base_dataset.data_source.retrieve(pos_idx)
-            )
+            positive_sample_index = distances.masked_fill(~overlap, float("inf")).argmin().item()
+            positive_sample = self.base_dataset[positive_sample_index]
         else:
             ColoredLogger.warning(f"No positive sample found for anchor index {index}")
             positive_sample = anchor_sample
 
         if no_overlap.any():
-            neg_idx = distances.masked_fill(~no_overlap, float("-inf")).argmax().item()
-            negative_sample = self.base_dataset.process_row(
-                neg_idx, self.base_dataset.data_source.retrieve(neg_idx)
-            )
+            negative_sample_index = distances.masked_fill(~no_overlap, float("-inf")).argmax().item()
+            negative_sample = self.base_dataset[negative_sample_index]
         else:
             ColoredLogger.warning(f"No negative sample found for anchor index {index}")
             # fallback: pick a random different sample
-            neg_idx = (index + 1) % len(self.base_dataset)
-            negative_sample = self.base_dataset.process_row(
-                neg_idx, self.base_dataset.data_source.retrieve(neg_idx)
-            )
+            negative_sample_index = (index + 1) % len(self.base_dataset)
+            negative_sample = self.base_dataset[negative_sample_index]
 
         return {
             "anchor": anchor_sample,

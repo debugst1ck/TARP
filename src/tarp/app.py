@@ -1,4 +1,5 @@
 import datetime
+import os
 import torch
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def main() -> None:
     dataset = MultiLabelClassificationDataset(
         (
             TabularSequenceSource(source=Path("temp/data/processed/card_amr.parquet"))
-            & FastaSliceSource(
+            + FastaSliceSource(
                 directory=Path("temp/data/external/sequences"),
                 metadata=Path("temp/data/processed/non_amr_genes_10000.parquet"),
                 key_column="genomic_nucleotide_accession.version",
@@ -88,7 +89,7 @@ def main() -> None:
         base_dataset=dataset, label_cache=Path("temp/data/cache/labels_cache.parquet")
     )
 
-    # Make a subset of the dataset for quick testing    
+    # Make a subset of the dataset for quick testing
     indices = list(range(len(dataset)))
     train_indices, temp_indices = train_test_split(
         indices, test_size=0.2, random_state=SEED
@@ -99,7 +100,6 @@ def main() -> None:
     train_dataset = Subset(dataset, train_indices)
     valid_dataset = Subset(dataset, valid_indices)
     # test_dataset = Subset(dataset, test_indices)
-    
 
     # encoder = LstmEncoder(
     #     vocabulary_size=dataset.tokenizer.vocab_size,
@@ -204,7 +204,7 @@ def main() -> None:
     #     accumulation_steps=8,  # Gradient accumulation to simulate larger batch size
     # )
     # trainer.fit()
-    
+
     trainer = MultiLabelClassificationTrainer(
         model=classification_model,
         train_dataset=train_dataset,
