@@ -23,9 +23,3 @@ class MultiLabelClassificationDataset(ClassificationDataset):
             maximum_sequence_length,
             augmentation,
         )
-
-    def __getitem__(self, index: int) -> dict[str, Tensor]:
-        return super().__getitem__(index)
-
-    def __len__(self) -> int:
-        return super().__len__()

@@ -6,6 +6,8 @@ from tarp.services.datasets import SequenceDataset
 from tarp.services.datasource.sequence import SequenceDataSource
 from tarp.services.tokenizers import Tokenizer
 
+from typing import Optional
+
 
 class ClassificationDataset(SequenceDataset):
     def __init__(
@@ -15,24 +17,20 @@ class ClassificationDataset(SequenceDataset):
         sequence_column: str,
         label_columns: list[str],
         maximum_sequence_length: int,
-        augumentation: AugmentationTechnique = NoAugmentation(),
+        augmentation: AugmentationTechnique = NoAugmentation(),
     ):
         super().__init__(
             data_source,
             tokenizer,
             sequence_column,
             maximum_sequence_length,
-            augumentation,
+            augmentation,
         )
         self.label_columns = label_columns
-
-    def __getitem__(self, index: int) -> dict[str, Tensor]:
-        item = super().__getitem__(index)
-        row = self.data_source.retrieve(index)
+        
+    def process_row(self, row: dict) -> dict[str, Tensor]:
+        item = super().process_row(row)
         # Extract labels for multi-source multi-label classification
         labels = [row.get(col, 0) for col in self.label_columns]
         item["labels"] = torch.tensor(labels, dtype=torch.float)
         return item
-
-    def __len__(self) -> int:
-        return self.data_source.height

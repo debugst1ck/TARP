@@ -5,6 +5,7 @@ from Bio import SeqIO
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from Bio.Seq import Seq
+import torch
 
 # Mru cache could be used for caching sequences if needed
 
@@ -19,8 +20,7 @@ class SequenceDataSource(ABC):
         """
         Get the number of rows in the data source.
 
-        :return: The height of the sequence.
-        :rtype: int
+        :return int: The height of the sequence.
         """
         raise NotImplementedError
 
@@ -30,8 +30,7 @@ class SequenceDataSource(ABC):
         Retrieve a single row from the data source.
 
         :param int index: The index of the row to retrieve.
-        :return: A dictionary representation of the row.
-        :rtype: dict
+        :return dict: A dictionary representation of the row.
         """
         raise NotImplementedError
 
@@ -40,8 +39,7 @@ class SequenceDataSource(ABC):
         Retrieve multiple rows from the data source.
 
         :param list[int] indices: The indices of the rows to retrieve.
-        :return: A list of dictionary representations of the rows.
-        :rtype: list[dict]
+        :return list[dict]: A list of dictionary representations of the rows.
         """
         return [self.retrieve(i) for i in indices]
 
@@ -148,17 +146,63 @@ class CombinationSource(SequenceDataSource):
 
     def __init__(self, sources: list[SequenceDataSource]):
         self.sources = sources
+        self._cumulative_heights = self._compute_cumulative_heights()
+
+    def _compute_cumulative_heights(self):
+        total = 0
+        cumulative_heights = []
+        for source in self.sources:
+            total += source.height
+            cumulative_heights.append(total)
+        return cumulative_heights
 
     @property
     def height(self) -> int:
         return sum(source.height for source in self.sources)
 
     def retrieve(self, index: int) -> dict:
-        for source in self.sources:
-            if index < source.height:
-                return source.retrieve(index)
-            index -= source.height
+        for i, cumulative_height in enumerate(self._cumulative_heights):
+            if index < cumulative_height:
+                previous_cumulative_height = (
+                    0 if i == 0 else self._cumulative_heights[i - 1]
+                )
+                return self.sources[i].retrieve(index - previous_cumulative_height)
         raise IndexError("Index out of range for combined data sources.")
+
+    def _get_source_and_local_index(self, index: int) -> tuple[int, int]:
+        for i, cumulative_height in enumerate(self._cumulative_heights):
+            if index < cumulative_height:
+                previous_cumulative_height = (
+                    0 if i == 0 else self._cumulative_heights[i - 1]
+                )
+                local_index = index - previous_cumulative_height
+                return i, local_index
+        raise IndexError("Index out of range for combined data sources.")
+
+    def batch(self, indices: list[int]) -> list[dict]:
+        """
+        Efficiently batch indices across multiple sources, preserving input order.
+        """
+        # source_index: list[[tuple[global_index, local_index]]]
+        buckets: dict[int, list[tuple[int, int]]] = {
+            i: [] for i in range(len(self.sources))
+        }
+        order = [None] * len(indices)
+
+        # Bucket-ize 1 pass
+        for position, global_index in enumerate(indices):
+            source_index, local_index = self._get_source_and_local_index(global_index)
+            buckets[source_index].append((position, local_index))
+
+        # Fetch from each source once
+        for source_index, bucket in buckets.items():
+            if not bucket:
+                continue
+            positions, local_indices = zip(*bucket)
+            rows = self.sources[source_index].batch(list(local_indices))
+            for position, row in zip(positions, rows):
+                order[position] = row
+        return order
 
 
 class InMemorySequenceSource(SequenceDataSource):
@@ -175,6 +219,9 @@ class InMemorySequenceSource(SequenceDataSource):
 
     def retrieve(self, index: int) -> dict:
         return self.dataframe.row(index, named=True)
+
+    def batch(self, indices: list[int]) -> list[dict]:
+        return self.dataframe.rows(indices, named=True)
 
 
 class FastaSliceSource(SequenceDataSource):
