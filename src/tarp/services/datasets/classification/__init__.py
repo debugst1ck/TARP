@@ -27,9 +27,9 @@ class ClassificationDataset(SequenceDataset):
             augmentation,
         )
         self.label_columns = label_columns
-        
-    def process_row(self, row: dict) -> dict[str, Tensor]:
-        item = super().process_row(row)
+
+    def process_row(self, index: int, row: dict) -> dict[str, Tensor]:
+        item = super().process_row(index, row)
         # Extract labels for multi-source multi-label classification
         labels = [row.get(col, 0) for col in self.label_columns]
         item["labels"] = torch.tensor(labels, dtype=torch.float)

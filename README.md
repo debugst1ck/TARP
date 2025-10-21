@@ -1,4 +1,4 @@
-# TARP: Transformers for Antimicrobial Resistance Prediction 
+# 🦠 TARP: Transformers for Antimicrobial Resistance Prediction 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/release/python-380/)
 [![GitHub License](https://img.shields.io/github/license/debugst1ck/TARP.svg)](https://github.com/debugst1ck/TARP/blob/main/LICENSE)
 [![GitHub Issues](https://img.shields.io/github/issues/debugst1ck/TARP.svg)](https://github.com/debugst1ck/TARP/issues)
@@ -7,7 +7,13 @@
 
 This repository is a suite of tools and models designed to predict antimicrobial resistance (AMR) using transformer-based architectures. The project uses state-of-the-art techniques in natural language processing (NLP) to analyze genetic sequences and predict resistance profiles.
 
-## How to use
+## ✨ Features
+- Implementation of transformer and traditional architectures tailored for AMR prediction.
+- Data preprocessing pipelines for genetic sequences.
+- Automatic mixed precision training for improved performance.
+- Support for various datasets and easy integration of new data sources.
+
+## 🚀 Getting Started
 1. Clone the repository:
     ```bash
     git clone https://github.com/debugst1ck/TARP.git
@@ -38,12 +44,12 @@ This repository is a suite of tools and models designed to predict antimicrobial
     tarp
     ```
 
-## Developer's notes
+## 👨‍💻 Developer's notes
 The codebase is structured to facilitate easy experimentation with different transformer architectures and hyperparameters. The main components include data preprocessing, model training, evaluation, and visualization of results.
-### Attention Mask
+### 🧠 Attention Mask
 A value of 1 or True indicates that the model should attend to this position. This is for the actual content of the input. A value of 0 or False indicates that the model should not attend to this position, typically because it is padding.
 
-### Class Weights
+### 🏷️ Class Weights
 Class weights are calculated to address class imbalance in the dataset. The weights are inversely proportional to the frequency of each class, ensuring that the model pays more attention to minority classes during training.
 
 $$

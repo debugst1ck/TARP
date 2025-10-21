@@ -38,12 +38,11 @@ class SequenceDataset(Dataset):
         :param row: Optional pre-fetched row corresponding to the index. If provided, this will be used instead of fetching from the data source.
         :return: Processed item.
         """
-        if row is None:
-            row = self.data_source.retrieve(index)
-        return self.process_row(row)
+        row = self.data_source.retrieve(index)
+        return self.process_row(index, row)
 
     def __getitems__(
-        self, indices: list[int], rows: Optional[list[dict]]
+        self, indices: list[int], rows: Optional[list[dict]] = None
     ) -> list[dict[str, Tensor]]:
         """
         Retrieve multiple items by their indices.
@@ -54,9 +53,9 @@ class SequenceDataset(Dataset):
         """
         if rows is None:
             rows = self.data_source.batch(indices)
-        return [self.process_row(row) for row in rows]
+        return [self.process_row(index, row) for index, row in zip(indices, rows)]
 
-    def process_row(self, row: dict) -> dict[str, Tensor]:
+    def process_row(self, index: int, row: dict) -> dict[str, Tensor]:
         sequence = row[self.sequence_column]
         sequence = self.augmentation.apply(sequence)
         tokenized = self.tokenizer.tokenize(sequence)

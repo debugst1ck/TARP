@@ -10,6 +10,7 @@ from tarp.cli.logging.colored import ColoredLogger
 from pathlib import Path
 
 import polars as pl
+from torch import Tensor
 
 
 class MultiLabelOfflineTripletDataset(Dataset):
@@ -73,11 +74,8 @@ class MultiLabelOfflineTripletDataset(Dataset):
             )
             ColoredLogger.info(f"Saved labels to cache: {label_cache}")
 
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, index: int):
-        anchor_sample = self.base_dataset[index]
+    def process_row(self, index: int, row: dict) -> dict[str, dict[str, Tensor]]:
+        anchor_sample = self.base_dataset.process_row(index, row)
         anchor_labels = self.labels[index].unsqueeze(0)  # shape (1, num_labels)
 
         # Compute distances to all samples
@@ -94,24 +92,28 @@ class MultiLabelOfflineTripletDataset(Dataset):
         # Negative mask: no shared labels
         no_overlap = ~overlap
 
-        # Hardest positive = min distance among positives
         if overlap.any():
             # Find the hardest positive sample
             pos_idx = distances.masked_fill(~overlap, float("inf")).argmin().item()
-            positive_sample = self.base_dataset[pos_idx]
+            positive_sample = self.base_dataset.process_row(
+                pos_idx, self.base_dataset.data_source.retrieve(pos_idx)
+            )
         else:
             ColoredLogger.warning(f"No positive sample found for anchor index {index}")
             positive_sample = anchor_sample
 
-        # Hardest negative = max distance among negatives
         if no_overlap.any():
             neg_idx = distances.masked_fill(~no_overlap, float("-inf")).argmax().item()
-            negative_sample = self.base_dataset[neg_idx]
+            negative_sample = self.base_dataset.process_row(
+                neg_idx, self.base_dataset.data_source.retrieve(neg_idx)
+            )
         else:
             ColoredLogger.warning(f"No negative sample found for anchor index {index}")
             # fallback: pick a random different sample
             neg_idx = (index + 1) % len(self.base_dataset)
-            negative_sample = self.base_dataset[neg_idx]
+            negative_sample = self.base_dataset.process_row(
+                neg_idx, self.base_dataset.data_source.retrieve(neg_idx)
+            )
 
         return {
             "anchor": anchor_sample,
