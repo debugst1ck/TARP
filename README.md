@@ -46,6 +46,7 @@ This repository is a suite of tools and models designed to predict antimicrobial
 
 ## 👨‍💻 Developer's notes
 The codebase is structured to facilitate easy experimentation with different transformer architectures and hyperparameters. The main components include data preprocessing, model training, evaluation, and visualization of results.
+
 ### 🧠 Attention Mask
 A value of 1 or True indicates that the model should attend to this position. This is for the actual content of the input. A value of 0 or False indicates that the model should not attend to this position, typically because it is padding.
 
