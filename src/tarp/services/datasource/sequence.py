@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from functools import lru_cache
 from Bio.Seq import Seq
 import torch
+from torch import Tensor
 
 from tarp.cli.logging.colored import ColoredLogger
 
@@ -156,61 +157,75 @@ class CombinationSource(SequenceDataSource):
         self.sources = sources
         self._cumulative_heights = self._compute_cumulative_heights()
 
-    def _compute_cumulative_heights(self):
-        total = 0
-        cumulative_heights = []
-        for source in self.sources:
-            total += source.height
-            cumulative_heights.append(total)
-        return cumulative_heights
+    def _compute_cumulative_heights(self) -> Tensor:
+        heights = torch.tensor(
+            [source.height for source in self.sources], dtype=torch.long
+        )
+        return torch.cumsum(heights, dim=0)
 
     @property
     def height(self) -> int:
         return sum(source.height for source in self.sources)
 
     def retrieve(self, index: int) -> dict:
-        for i, cumulative_height in enumerate(self._cumulative_heights):
-            if index < cumulative_height:
-                previous_cumulative_height = (
-                    0 if i == 0 else self._cumulative_heights[i - 1]
-                )
-                return self.sources[i].retrieve(index - previous_cumulative_height)
+        source_index, local_index = self._get_source_and_local_index(index)
+        if 0 <= source_index < len(self.sources):
+            return self.sources[source_index].retrieve(local_index)
         raise IndexError("Index out of range for combined data sources.")
 
     def _get_source_and_local_index(self, index: int) -> tuple[int, int]:
-        for i, cumulative_height in enumerate(self._cumulative_heights):
-            if index < cumulative_height:
-                previous_cumulative_height = (
-                    0 if i == 0 else self._cumulative_heights[i - 1]
-                )
-                local_index = index - previous_cumulative_height
-                return i, local_index
-        raise IndexError("Index out of range for combined data sources.")
+        # bounds check
+        if index < 0 or index >= int(self.height):
+            raise IndexError("Index out of range for combined data sources.")
+
+        # make a scalar tensor on same device as cumulative heights
+        index: Tensor = torch.tensor(
+            index,
+            device=self._cumulative_heights.device,
+            dtype=self._cumulative_heights.dtype,
+        )
+        source_index = torch.bucketize(index, self._cumulative_heights, right=False)
+        
+        previous_cumulative_height = torch.where(
+            source_index == 0,
+            torch.tensor(0, device=self._cumulative_heights.device),
+            self._cumulative_heights[source_index - 1],
+        )
+        
+        local_index = index - previous_cumulative_height
+
+        return int(source_index.item()), int(local_index.item())
 
     def batch(self, indices: list[int]) -> list[dict]:
         """
         Efficiently batch indices across multiple sources, preserving input order.
         """
-        # source_index: list[[tuple[global_index, local_index]]]
-        buckets: dict[int, list[tuple[int, int]]] = {
-            i: [] for i in range(len(self.sources))
-        }
-        order = [None] * len(indices)
+        if not indices:
+            return []
 
-        # Bucket-ize 1 pass
-        for position, global_index in enumerate(indices):
-            source_index, local_index = self._get_source_and_local_index(global_index)
-            buckets[source_index].append((position, local_index))
+        indices: Tensor = torch.as_tensor(indices)
 
-        # Fetch from each source once
-        for source_index, bucket in buckets.items():
-            if not bucket:
-                continue
-            positions, local_indices = zip(*bucket)
-            rows = self.sources[source_index].batch(list(local_indices))
-            for position, row in zip(positions, rows):
-                order[position] = row
-        return order
+        source_indices: Tensor = torch.bucketize(
+            indices, self._cumulative_heights, right=False
+        )
+        previous_cumulative_height = torch.cat([torch.tensor([0]), self._cumulative_heights])
+        local_indices = indices - previous_cumulative_height[source_indices]
+
+        results = [None] * len(indices)
+
+        unique_sources: Tensor = torch.unique(source_indices)
+        for source_index in unique_sources:
+            mask = source_indices == source_index
+            positions = torch.nonzero(mask, as_tuple=False).squeeze(1)
+            source_local_indices = local_indices[mask].tolist()
+            batch_results = self.sources[source_index.item()].batch(
+                source_local_indices
+            )
+
+            for position, result in zip(positions.tolist(), batch_results):
+                results[position] = result
+
+        return results
 
 
 class InMemorySequenceSource(SequenceDataSource):
@@ -343,7 +358,7 @@ class FastaSliceSource(SequenceDataSource):
 
                 row[self.sequence_column] = str(sequence)
                 results.append(row)
-        if not results.__len__() == len(indices):
+        if not len(results) == len(indices):
             ColoredLogger.warning(
                 f"Batch retrieval returned {len(results)} results, "
                 f"but {len(indices)} were requested."
