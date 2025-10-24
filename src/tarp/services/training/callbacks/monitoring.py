@@ -8,10 +8,18 @@ from tarp.cli.logging.colored import ColoredLogger
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+
 class EarlyStopping(Callback):
-    def __init__(self, patience: int = 3, monitor_metric: str = "validation_loss", monitor_mode: Extremum = Extremum.MIN) -> None:
+    def __init__(
+        self,
+        patience: int = 3,
+        monitor_metric: str = "validation_loss",
+        monitor_mode: Extremum = Extremum.MIN,
+    ) -> None:
         self.patience = patience
-        self.best_metric_value: float = float("inf") if monitor_mode == Extremum.MIN else float("-inf")
+        self.best_metric_value: float = (
+            float("inf") if monitor_mode == Extremum.MIN else float("-inf")
+        )
         self.counter = 0
         self.monitor_metric = monitor_metric
         self.monitor_mode = monitor_mode
@@ -41,11 +49,13 @@ class EarlyStopping(Callback):
 
     def on_training_start(self, context: TrainerContext) -> None:
         ColoredLogger.debug(f"Monitoring {self.monitor_metric} for early stopping.")
-        
-class ReduceLearningRate(Callback):
+
+
+class LearningRateScheduler(Callback):
     """
     Callback to step the learning rate scheduler at the end of each epoch.
     """
+
     def __init__(self, monitor_metric: str) -> None:
         self.monitor_metric = monitor_metric
 
@@ -53,10 +63,19 @@ class ReduceLearningRate(Callback):
         if context.scheduler is None:
             return
         if isinstance(context.scheduler, ReduceLROnPlateau):
-            current_value = context.state.history[context.epoch].get(self.monitor_metric)
+            current_value = context.state.history[context.epoch].get(
+                self.monitor_metric
+            )
             if current_value is not None:
-                context.scheduler.step(current_value) 
+                context.scheduler.step(current_value)
+                if context.scheduler.num_bad_epochs == context.scheduler.patience:
+                    ColoredLogger.info(
+                        f"Learning rate reduced to {context.scheduler._last_lr}."
+                    )
         else:
             context.scheduler.step()
-                
-                
+            
+    def on_training_start(self, context, **kwargs):
+        ColoredLogger.debug(
+            f"Learning rate scheduler will monitor {self.monitor_metric}."
+        )

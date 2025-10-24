@@ -176,7 +176,7 @@ class CombinationSource(SequenceDataSource):
     def _get_source_and_local_index(self, index: int) -> tuple[int, int]:
         # bounds check
         if index < 0 or index >= int(self.height):
-            raise IndexError("Index out of range for combined data sources.")
+            raise IndexError(f"Index {index} out of range (0..{self.height-1})")
 
         # make a scalar tensor on same device as cumulative heights
         index: Tensor = torch.tensor(
@@ -184,7 +184,7 @@ class CombinationSource(SequenceDataSource):
             device=self._cumulative_heights.device,
             dtype=self._cumulative_heights.dtype,
         )
-        source_index = torch.bucketize(index, self._cumulative_heights, right=False)
+        source_index = torch.bucketize(index, self._cumulative_heights, right=True)
         
         previous_cumulative_height = torch.where(
             source_index == 0,
@@ -206,7 +206,7 @@ class CombinationSource(SequenceDataSource):
         indices: Tensor = torch.as_tensor(indices)
 
         source_indices: Tensor = torch.bucketize(
-            indices, self._cumulative_heights, right=False
+            indices, self._cumulative_heights, right=True
         )
         previous_cumulative_height = torch.cat([torch.tensor([0]), self._cumulative_heights])
         local_indices = indices - previous_cumulative_height[source_indices]
@@ -339,7 +339,7 @@ class FastaSliceSource(SequenceDataSource):
         results = []
         for key, group in groups.items():
             if key[0] not in self._fasta_map:
-                continue
+                raise FileNotFoundError(f"No FASTA found for {key[0]}")
 
             full_sequence = self._load_sequence(key[0])
 
@@ -363,4 +363,5 @@ class FastaSliceSource(SequenceDataSource):
                 f"Batch retrieval returned {len(results)} results, "
                 f"but {len(indices)} were requested."
             )
+            exit(1)
         return results

@@ -85,7 +85,7 @@ class AsymmetricFocalLoss(nn.Module):
 
         # Apply class weights
         if self.class_weights is not None:
-            loss *= self.class_weights.unsqueeze(0)
+            loss *= self.class_weights.to(loss.device).unsqueeze(0)
 
         # Apply reduction
         loss = -loss

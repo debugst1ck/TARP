@@ -40,6 +40,7 @@ class TrainingLoop(Loop):
             loss, prediction, expected = self.step(
                 batch, optimize=accumulation_stop or is_last_step
             )
+            total_loss += loss.item()
             self._execute_callbacks(Callback.on_training_batch_end.__name__)
             loop.set_postfix(loss=f"{loss.item():.4f}")
 

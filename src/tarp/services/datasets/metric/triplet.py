@@ -37,8 +37,9 @@ class MultiLabelOfflineTripletDataset(SequenceDataset):
 
         self.labels = None
 
-        if label_cache:
+        if label_cache and label_cache.exists():
             ColoredLogger.debug(f"Checking for label cache at: {label_cache}")
+            
             df = pl.read_parquet(label_cache)
             cached_columns = df.columns
 
@@ -55,7 +56,6 @@ class MultiLabelOfflineTripletDataset(SequenceDataset):
                     f"Label cache mismatch — columns or size differ. "
                     f"Expected shape ({self.data_source.height}, {len(expected_columns)}), "
                     f"found shape {df.shape}, column difference: {set(cached_columns) - set(expected_columns)}"
-                    
                 )
 
         # If cache missing or mismatched, recompute and save

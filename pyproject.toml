@@ -24,6 +24,8 @@ dependencies = [
     "safetensors",  # Safe and efficient model storage
     "ipykernel",    # Jupyter notebook support
     "nbformat",     # Jupyter notebook support
+    "ipywidgets",   # Jupyter notebook support
+    "umap-learn",   # Dimensionality reduction
 ]
 
 [project.scripts]

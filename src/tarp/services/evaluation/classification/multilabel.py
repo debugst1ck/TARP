@@ -24,6 +24,7 @@ class MultiLabelMetrics:
             "subset_accuracy": self._subset_accuracy,
             "roc_auc": self._roc_auc,
             "hamming_loss": self._hamming_loss,
+            "label_ranking_average_precision": self._label_ranking_average_precision,
         }
 
     def _predict_probability(self, logits: Tensor) -> Tensor:
@@ -118,6 +119,20 @@ class MultiLabelMetrics:
         predictions = self._predict(logits)
         return sklearn.metrics.hamming_loss(
             targets.cpu().numpy(), predictions.cpu().numpy()
+        )
+        
+    def _label_ranking_average_precision(self, logits: Tensor, targets: Tensor) -> float:
+        if not self.logits:
+            ColoredLogger.warning(
+                "Label Ranking Average Precision metric expects logits, but got probabilities."
+            )
+            return float("nan")
+
+        probs = self._predict_probability(logits).cpu().numpy()
+        y_true = targets.cpu().numpy()
+
+        return sklearn.metrics.label_ranking_average_precision_score(
+            y_true, probs
         )
 
     # --- public interface ---

@@ -34,6 +34,7 @@ class ValidationLoop(Loop):
                     all_predictions.append(predictions)
                 if expected is not None:
                     all_expected.append(expected)
+                total_loss += loss.item()
                 loop.set_postfix(loss=f"{loss.item():.4f}")
         average_loss = total_loss / len(dataloader)
         metrics = self.evaluation(all_predictions, all_expected)

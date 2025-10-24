@@ -17,7 +17,7 @@ from tarp.services.training.callbacks import Callback
 from tarp.cli.logging.colored import ColoredLogger
 from tarp.services.training.callbacks.monitoring import (
     EarlyStopping,
-    ReduceLearningRate,
+    LearningRateScheduler,
 )
 
 
@@ -38,7 +38,7 @@ class Trainer(ABC):
         accumulation_steps: int = 1,
         callbacks: list[Callback] = [
             EarlyStopping(5),
-            ReduceLearningRate("validation_loss"),
+            LearningRateScheduler("validation_loss"),
         ],
         shared: dict = {},
     ):

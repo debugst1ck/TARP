@@ -4,7 +4,7 @@ import torch
 from pathlib import Path
 
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingWarmRestarts
 
 from torch.utils.data import Subset
 
@@ -45,11 +45,17 @@ from tarp.model.finetuning.classification import ClassificationModel
 
 from tarp.config import LstmConfig, HyenaConfig, Dnabert2Config
 
+from tarp.services.training.trainer.multitask.triplet_multilabel import (
+    JointTripletClassificationTrainer,
+)
+
 from sklearn.model_selection import train_test_split
 
 
 def main() -> None:
     ColoredLogger.info("App started")
+
+    run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Set seed for reproducibility
     SEED = establish_random_seed(69420)  # FuNnY NuMbEr :D
@@ -85,8 +91,63 @@ def main() -> None:
         ),
     )
 
+    dataset_amr_non_amr = MultiLabelClassificationDataset(
+        (
+            TabularSequenceSource(
+                source=Path("temp/data/processed/card_amr_binary.parquet")
+            )
+            + FastaSliceSource(
+                directory=Path("temp/data/external/sequences"),
+                metadata=Path("temp/data/processed/non_amr_genes_10000.parquet"),
+                key_column="genomic_nucleotide_accession.version",
+                start_column="start_position_on_the_genomic_accession",
+                end_column="end_position_on_the_genomic_accession",
+                orientation_column="orientation",
+            )
+        ),
+        Dnabert2Tokenizer(),
+        sequence_column="sequence",
+        label_columns=["amr", "non_amr"],
+        maximum_sequence_length=512,
+        augmentation=CombinationTechnique(
+            [
+                RandomMutation(),
+                InsertionDeletion(),
+                ReverseComplement(0.5),
+            ]
+        ),
+    )
+
+    triplet_dataset_amr_non_amr = MultiLabelOfflineTripletDataset(
+        base_dataset=dataset_amr_non_amr,
+        label_cache=Path("temp/data/cache/labels_cache_amr_non_amr.parquet"),
+    )
+
     triplet_dataset = MultiLabelOfflineTripletDataset(
         base_dataset=dataset, label_cache=Path("temp/data/cache/labels_cache.parquet")
+    )
+
+    label_cache = pl.read_parquet(Path("temp/data/cache/labels_cache.parquet"))
+    label_tensor = torch.tensor(label_cache.select(label_columns).to_numpy())
+
+    class_counts = label_tensor.sum(dim=0)
+    total_counts = label_tensor.size(0)
+    pos_weights = (total_counts - class_counts) / class_counts
+    pos_weights = (pos_weights - pos_weights.min()) / (
+        pos_weights.max() - pos_weights.min()
+    )
+    pos_weights = pos_weights * (3.0 - 0.1) + 0.1  # Scale to [0.1, 3.0]
+
+    # Display pos weights as a polars DataFrame
+    ColoredLogger.debug(
+        str(
+            pl.DataFrame(
+                {
+                    "label": label_columns,
+                    "pos_weight": pos_weights.tolist(),
+                }
+            )
+        )
     )
 
     # Make a subset of the dataset for quick testing
@@ -133,6 +194,7 @@ def main() -> None:
 
     triplet_train_dataset = Subset(triplet_dataset, train_indices)
     triplet_valid_dataset = Subset(triplet_dataset, valid_indices)
+
     # triplet_test_dataset = Subset(triplet_dataset, test_indices)
 
     ColoredLogger.info(
@@ -160,72 +222,64 @@ def main() -> None:
         else:
             head_params.append(p)
 
-    optimizer_classification = AdamW(
-        [
-            {"params": encoder_params, "lr": 2e-3, "weight_decay": 1e-2},
-            {"params": head_params, "lr": 1e-3, "weight_decay": 1e-2},
-        ]
-    )
-    optimizer_triplet = AdamW(triplet_model.parameters(), lr=1e-3, weight_decay=1e-2)
-
-    ColoredLogger.info("Training model with triplet loss first")
-    metric_learning_trainer = TripletMetricTrainer(
+    bin_triplet_optimizer = AdamW(triplet_model.parameters(), lr=1e-4, weight_decay=1e-2)
+    ColoredLogger.info("Starting triplet model training on AMR vs non-AMR task")
+    TripletMetricTrainer(
         model=triplet_model,
-        train_dataset=triplet_train_dataset,
-        valid_dataset=triplet_valid_dataset,
-        optimizer=optimizer_triplet,
-        scheduler=ReduceLROnPlateau(optimizer_triplet, mode="min", patience=3),
+        train_dataset=Subset(triplet_dataset_amr_non_amr, train_indices),
+        valid_dataset=Subset(triplet_dataset_amr_non_amr, valid_indices),
+        optimizer=bin_triplet_optimizer,
+        scheduler=CosineAnnealingWarmRestarts(bin_triplet_optimizer, T_0=5, T_mult=2),
         device=device,
         epochs=5,
         num_workers=4,
         batch_size=64,
         accumulation_steps=4,
-    )
-    metric_learning_trainer.fit()
+    ).fit()
 
+    ColoredLogger.info("Starting triplet model training on full multi-label task")
+    multi_triplet_optimizer = AdamW(triplet_model.parameters(), lr=1e-4, weight_decay=1e-3)
+    TripletMetricTrainer(
+        model=triplet_model,
+        train_dataset=triplet_train_dataset,
+        valid_dataset=triplet_valid_dataset,
+        optimizer=multi_triplet_optimizer,
+        scheduler=CosineAnnealingWarmRestarts(multi_triplet_optimizer, T_0=5, T_mult=2),
+        device=device,
+        epochs=15,
+        num_workers=4,
+        batch_size=64,
+        accumulation_steps=4,
+    ).fit()
+
+    # Load the trained weights into the classification model's encoder
     classification_model.encoder.load_state_dict(triplet_model.encoder.state_dict())
-
-    ColoredLogger.info("Training model with multi-label classification loss")
-    # trainer = MultiLabelClassificationTrainer(
-    #     model=classification_model,
-    #     train_dataset=train_dataset,
-    #     valid_dataset=valid_dataset,
-    #     optimizer=optimizer_classification,
-    #     scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
-    #     device=device,
-    #     epochs=10,
-    #     num_workers=4,
-    #     batch_size=32,
-    #     # criterion=FocalLoss(alpha=alphas, gamma=2.0),
-    #     criterion=AsymmetricFocalLoss(
-    #         gamma_pos=2,
-    #         gamma_neg=2,  # class_weights=pos_weights.to(device)
-    #     ),
-    #     accumulation_steps=8,  # Gradient accumulation to simulate larger batch size
-    # )
-    # trainer.fit()
-
+    ColoredLogger.info("Starting classification model training")
+    optimizer_classification = AdamW(
+        [
+            {"params": encoder_params, "lr": 1e-4, "weight_decay": 1e-2},
+            {"params": head_params, "lr": 1e-3, "weight_decay": 1e-2},
+        ]
+    )
     trainer = MultiLabelClassificationTrainer(
         model=classification_model,
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,
         optimizer=optimizer_classification,
         scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
+        criterion=AsymmetricFocalLoss(gamma_neg=1, gamma_pos=3, class_weights=pos_weights),
         device=device,
-        epochs=10,
+        epochs=15,
         num_workers=4,
         batch_size=64,
-        criterion=AsymmetricFocalLoss(
-            gamma_pos=2,
-            gamma_neg=2,  # class_weights=pos_weights.to(device)
-        ),
-        accumulation_steps=4,  # Gradient accumulation to simulate larger batch size
+        accumulation_steps=4,
     )
     trainer.fit()
 
+
     torch.save(
         classification_model.state_dict(),
-        f"temp/checkpoints/{classification_model.encoder.__class__.__name__}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pt",
+        f"temp/checkpoints/{classification_model.encoder.__class__.__name__}_{run_id}.pt",
     )
 
     ColoredLogger.info("Training complete")
@@ -235,7 +289,7 @@ def main() -> None:
     history_df = pl.DataFrame(history)
     fig = px.line(history_df, y=history_df.columns, title="Training History")
     fig.write_html(
-        f"temp/reports/{classification_model.encoder.__class__.__name__}.html"
+        f"temp/reports/{classification_model.encoder.__class__.__name__}_{run_id}.html"
     )
 
 
