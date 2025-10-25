@@ -29,6 +29,7 @@ class MultiLabelClassificationTrainer(Trainer):
         class_weights: Optional[Tensor] = None,
         criterion: Optional[nn.Module] = None,
         accumulation_steps: int = 1,
+        persistent_workers: bool = False,
     ):
         if criterion is None:
             if class_weights is not None:
@@ -54,6 +55,7 @@ class MultiLabelClassificationTrainer(Trainer):
             num_workers=num_workers,
             use_amp=use_amp,
             accumulation_steps=accumulation_steps,
+            persistent_workers=persistent_workers,
         )
         
         self.criterion = self.criterion.to(device)

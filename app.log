@@ -1,0 +1,13 @@
+[INFO]	2025-10-25 19:56:09,032 - App started
+[INFO]	2025-10-25 19:56:09,032 - Multiprocessing start method set to 'spawn'
+[INFO]	2025-10-25 19:56:09,050 - Random seed set to 69420
+[DEBUG]	2025-10-25 19:56:10,461 - Checking for label cache at: temp\data\cache\labels_cache_amr_non_amr.parquet
+[INFO]	2025-10-25 19:56:10,466 - Loaded labels from cache (aligned to label_columns): temp\data\cache\labels_cache_amr_non_amr.parquet
+[DEBUG]	2025-10-25 19:56:10,466 - Checking for label cache at: temp\data\cache\labels_cache.parquet
+[INFO]	2025-10-25 19:56:10,472 - Loaded labels from cache (aligned to label_columns): temp\data\cache\labels_cache.parquet
+[INFO]	2025-10-25 19:56:10,507 - Training HyenaEncoder model
+[INFO]	2025-10-25 19:56:10,507 - Compiling model with torch.compile
+[INFO]	2025-10-25 19:56:11,618 - Using GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+[INFO]	2025-10-25 19:56:11,619 - Starting triplet model training on AMR vs non-AMR task
+[DEBUG]	2025-10-25 19:56:11,684 - Monitoring validation_loss for early stopping.
+[DEBUG]	2025-10-25 19:56:11,685 - Learning rate scheduler will monitor validation_loss.

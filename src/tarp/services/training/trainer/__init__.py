@@ -41,6 +41,7 @@ class Trainer(ABC):
             LearningRateScheduler("validation_loss"),
         ],
         shared: dict = {},
+        persistent_workers: bool = False,
     ):
         """
         Base Trainer class.
@@ -80,14 +81,16 @@ class Trainer(ABC):
             batch_size=batch_size,
             shuffle=True,
             num_workers=num_workers,
-            pin_memory=True,
+            pin_memory=True if persistent_workers==True else False,
+            persistent_workers=persistent_workers,
         )
         self.validation_dataloader = DataLoader(
             valid_dataset,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
-            pin_memory=True,
+            pin_memory=True if persistent_workers==True else False,
+            persistent_workers=persistent_workers,
         )
         
         self.callbacks = callbacks

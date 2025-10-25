@@ -29,6 +29,7 @@ class TripletMetricTrainer(Trainer):
         num_workers: int = 0,
         criterion: Optional[nn.Module] = None,
         accumulation_steps: int = 1,
+        persistent_workers: bool = False,
     ):
         super().__init__(
             model=model,
@@ -42,6 +43,7 @@ class TripletMetricTrainer(Trainer):
             max_grad_norm=max_grad_norm,
             num_workers=num_workers,
             accumulation_steps=accumulation_steps,
+            persistent_workers=persistent_workers,
         )
 
         # Loss function

@@ -51,9 +51,19 @@ from tarp.services.training.trainer.multitask.triplet_multilabel import (
 
 from sklearn.model_selection import train_test_split
 
+import torch.multiprocessing as mp
 
 def main() -> None:
     ColoredLogger.info("App started")
+    
+    try:
+        mp.set_start_method("spawn", force=True)
+        ColoredLogger.info("Multiprocessing start method set to 'spawn'")
+        persistent_workers = False
+    except RuntimeError:
+        ColoredLogger.warning("Multiprocessing start method was already set, skipping...")
+        persistent_workers = True
+        pass
 
     run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -232,9 +242,10 @@ def main() -> None:
         scheduler=CosineAnnealingWarmRestarts(bin_triplet_optimizer, T_0=5, T_mult=2),
         device=device,
         epochs=5,
-        num_workers=0,
+        num_workers=4,
         batch_size=64,
         accumulation_steps=4,
+        persistent_workers=persistent_workers,
     ).fit()
 
     ColoredLogger.info("Starting triplet model training on full multi-label task")
@@ -247,9 +258,10 @@ def main() -> None:
         scheduler=CosineAnnealingWarmRestarts(multi_triplet_optimizer, T_0=5, T_mult=2),
         device=device,
         epochs=15,
-        num_workers=0,
+        num_workers=4,
         batch_size=64,
         accumulation_steps=4,
+        persistent_workers=persistent_workers,
     ).fit()
 
     # Load the trained weights into the classification model's encoder
@@ -270,9 +282,10 @@ def main() -> None:
         criterion=AsymmetricFocalLoss(gamma_neg=1, gamma_pos=3, class_weights=pos_weights),
         device=device,
         epochs=15,
-        num_workers=0,
+        num_workers=4,
         batch_size=64,
         accumulation_steps=4,
+        persistent_workers=persistent_workers,
     )
     trainer.fit()
 
