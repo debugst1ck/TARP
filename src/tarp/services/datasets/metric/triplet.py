@@ -101,7 +101,7 @@ class MultiLabelOfflineTripletDataset(SequenceDataset):
             positive_sample_index = distances.masked_fill(~overlap, float("inf")).argmin().item()
             positive_sample = self.base_dataset[positive_sample_index]
         else:
-            ColoredLogger.warning(f"No positive sample found for anchor index {index}")
+            # fallback: use anchor as positive
             positive_sample = anchor_sample
 
         if no_overlap.any():

@@ -33,13 +33,23 @@ class ColoredLogger:
             
             logging.addLevelName(logging.WARNING, "WARN")
 
-            if not logger.handlers:  # only add handler once
-                handler = logging.StreamHandler()
-                formatter = ColoredFormatter(
-                    "[%(levelname)s]\t%(asctime)s - %(message)s"
-                )
-                handler.setFormatter(formatter)
-                logger.addHandler(handler)
+            handler = logging.StreamHandler()
+            file_handler = logging.FileHandler("app.log")
+            
+            console_formatter = ColoredFormatter(
+                "[%(levelname)s]\t%(asctime)s - %(message)s"
+            )
+            file_formatter = logging.Formatter(
+                "[%(levelname)s]\t%(asctime)s - %(message)s"
+            )
+
+            # Set formatter for file handler
+            file_handler.setFormatter(file_formatter)
+            handler.setFormatter(console_formatter)
+            
+            # Add handlers to logger
+            logger.addHandler(file_handler)
+            logger.addHandler(handler)
 
             cls._logger = logger
         return cls._logger

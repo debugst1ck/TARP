@@ -28,7 +28,7 @@ class TrainingLoop(Loop):
         total_loss = 0.0
         loop = tqdm(
             dataloader,
-            desc=f"Epoch {epoch+1}/{self.context.epochs}",
+            desc=f"Training {epoch+1}/{self.context.epochs}",
             unit="batch",
             colour="green",
         )

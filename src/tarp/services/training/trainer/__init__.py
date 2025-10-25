@@ -183,7 +183,7 @@ class Trainer(ABC):
             self.context.record_current_history(validation_metrics)
             
             for key, value in self.context.current_metrics.items():
-                ColoredLogger.debug(f"{key.title()}: {value:.4f}")
+                ColoredLogger.debug(f"{key}: {value:.4f}")
 
             self._execute_callbacks(Callback.on_epoch_end.__name__)
 
