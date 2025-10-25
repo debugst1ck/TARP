@@ -232,7 +232,7 @@ def main() -> None:
         scheduler=CosineAnnealingWarmRestarts(bin_triplet_optimizer, T_0=5, T_mult=2),
         device=device,
         epochs=5,
-        num_workers=4,
+        num_workers=0,
         batch_size=64,
         accumulation_steps=4,
     ).fit()
@@ -247,7 +247,7 @@ def main() -> None:
         scheduler=CosineAnnealingWarmRestarts(multi_triplet_optimizer, T_0=5, T_mult=2),
         device=device,
         epochs=15,
-        num_workers=4,
+        num_workers=0,
         batch_size=64,
         accumulation_steps=4,
     ).fit()
@@ -270,7 +270,7 @@ def main() -> None:
         criterion=AsymmetricFocalLoss(gamma_neg=1, gamma_pos=3, class_weights=pos_weights),
         device=device,
         epochs=15,
-        num_workers=4,
+        num_workers=0,
         batch_size=64,
         accumulation_steps=4,
     )
