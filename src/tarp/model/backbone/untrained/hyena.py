@@ -76,7 +76,10 @@ class HyenaEncoder(Encoder):
         self.output_dimension = embedding_dimension
 
     def encode(
-        self, sequence: Tensor, attention_mask: Optional[Tensor] = None
+        self,
+        sequence: Tensor,
+        attention_mask: Optional[Tensor] = None,
+        return_sequence: bool = False,
     ) -> Tensor:
         x = self.embedding(sequence)  # (batch, seq_len, embedding_dim)
 
@@ -85,6 +88,10 @@ class HyenaEncoder(Encoder):
 
         x = self.norm(x)
 
+        if return_sequence:
+            return x  # (batch_size, seq_len, output_dimension)
+
+        # Sequence level pooling, (mean or masked mean)
         if attention_mask is not None:
             mask = attention_mask.unsqueeze(-1).float()  # (batch, seq_len, 1)
             masked = (x * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)

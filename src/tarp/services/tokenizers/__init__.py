@@ -18,3 +18,7 @@ class Tokenizer:
     @property
     def vocab_size(self) -> int:
         raise NotImplementedError
+    
+    @property
+    def mask_token_id(self) -> int:
+        raise NotImplementedError

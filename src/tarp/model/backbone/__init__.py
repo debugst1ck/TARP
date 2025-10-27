@@ -10,7 +10,7 @@ class Encoder(nn.Module, ABC):
     
     @abstractmethod
     def encode(
-        self, sequence: Tensor, attention_mask: Optional[Tensor] = None
+        self, sequence: Tensor, attention_mask: Optional[Tensor] = None, return_sequence: bool = False
     ) -> Tensor:
         pass
 

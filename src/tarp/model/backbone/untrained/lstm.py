@@ -35,7 +35,10 @@ class LstmEncoder(Encoder):
         self.output_dimension = hidden_dimension * (2 if bidirectional else 1)
 
     def encode(
-        self, sequence: Tensor, attention_mask: Optional[Tensor] = None
+        self,
+        sequence: Tensor,
+        attention_mask: Optional[Tensor] = None,
+        return_sequence: bool = False,
     ) -> Tensor:
         embedded = self.embedding(sequence)
 
@@ -45,14 +48,18 @@ class LstmEncoder(Encoder):
                 embedded, lengths, batch_first=True, enforce_sorted=False
             )
             packed_output, (hidden, cell) = self.lstm(packed)
+            output, _ = pad_packed_sequence(packed_output, batch_first=True)
         else:
             output, (hidden, cell) = self.lstm(embedded)
 
-        if self.lstm.bidirectional:
-            pooled = torch.cat((hidden[-2], hidden[-1]), dim=1)
+        if return_sequence:
+            return output
         else:
-            pooled = hidden[-1]
-        return pooled  # (batch_size, output_dimension)
+            if self.lstm.bidirectional:
+                pooled = torch.cat((hidden[-2], hidden[-1]), dim=1)
+            else:
+                pooled = hidden[-1]
+            return pooled
 
     @property
     def encoding_size(self) -> int:

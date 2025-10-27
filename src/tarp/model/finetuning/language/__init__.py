@@ -18,7 +18,10 @@ class LanguageModel(nn.Module):
         )
 
     def forward(
-        self, sequence: torch.Tensor, attention_mask: torch.Tensor
+        self,
+        sequence: torch.Tensor,
+        attention_mask: torch.Tensor,
+        return_sequence: bool = True,
     ) -> torch.Tensor:
         """
         :param Tensor sequence: The input sequence for the encoder.
@@ -26,5 +29,7 @@ class LanguageModel(nn.Module):
         :return: The language modeling logits.
         :rtype: Tensor
         """
-        encoded_representation = self.encoder.encode(sequence, attention_mask)
+        encoded_representation = self.encoder.encode(
+            sequence, attention_mask, return_sequence=return_sequence
+        )
         return self.language_head(encoded_representation)

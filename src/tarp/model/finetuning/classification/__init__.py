@@ -13,10 +13,15 @@ class ClassificationModel(nn.Module):
         super().__init__()
         self.number_of_classes = number_of_classes
         self.encoder = encoder
-        self.classifier = nn.Linear(self.encoder.encoding_size, number_of_classes)
+        self.classification_head = nn.Linear(
+            self.encoder.encoding_size, number_of_classes
+        )
 
     def forward(
-        self, sequence: torch.Tensor, attention_mask: torch.Tensor
+        self,
+        sequence: torch.Tensor,
+        attention_mask: torch.Tensor,
+        return_sequence: bool = False,
     ) -> torch.Tensor:
         """
         :param Tensor sequence: The input sequence for the encoder.
@@ -24,5 +29,7 @@ class ClassificationModel(nn.Module):
         :return: The classification logits.
         :rtype: Tensor
         """
-        pooled_representation = self.encoder.encode(sequence, attention_mask)
-        return self.classifier(pooled_representation)
+        pooled_representation = self.encoder.encode(
+            sequence, attention_mask, return_sequence=return_sequence
+        )
+        return self.classification_head(pooled_representation)

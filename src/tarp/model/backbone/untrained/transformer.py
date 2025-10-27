@@ -43,7 +43,10 @@ class TransformerEncoder(Encoder):
         self.output_dimension = embedding_dimension
 
     def encode(
-        self, sequence: Tensor, attention_mask: Optional[Tensor] = None
+        self,
+        sequence: Tensor,
+        attention_mask: Optional[Tensor] = None,
+        return_sequence: bool = False,
     ) -> Tensor:
         embeddings = self.embedding(sequence)  # (batch, seq_len, embedding_dim)
         if attention_mask is not None:
@@ -54,7 +57,10 @@ class TransformerEncoder(Encoder):
         encoded = self.transformer_encoder(
             embeddings, src_key_padding_mask=src_key_padding_mask
         )
-        return self.pooling(self.dropout(encoded))
+        if return_sequence:
+            return self.dropout(encoded)
+        else:
+            return self.pooling(self.dropout(encoded))
 
     @property
     def encoding_size(self) -> int:

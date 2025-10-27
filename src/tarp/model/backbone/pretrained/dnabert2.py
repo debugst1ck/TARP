@@ -15,7 +15,9 @@ class Dnabert2Encoder(Encoder):
         self.encoder = AutoModel.from_pretrained(name, trust_remote_code=True)
         self.pooling = QueryAttentionPooling(hidden_dimension)
 
-    def encode(self, sequence: Tensor, attention_mask: Tensor) -> Tensor:
+    def encode(
+        self, sequence: Tensor, attention_mask: Tensor, return_sequence: bool = False
+    ) -> Tensor:
         """
         Encode the input sequence using DNABERT and apply attention pooling.
 
@@ -25,8 +27,11 @@ class Dnabert2Encoder(Encoder):
         :rtype: Tensor
         """
         outputs = self.encoder(input_ids=sequence, attention_mask=attention_mask)[0]
-        pooled_representation = self.pooling(outputs)
-        return pooled_representation
+        if return_sequence:
+            return outputs
+        else:
+            pooled_representation = self.pooling(outputs)
+            return pooled_representation
 
     @property
     def encoding_size(self) -> int:
@@ -60,7 +65,10 @@ class FrozenDnabert2Encoder(Encoder, FrozenModel):
         self.encoder.train()
 
     def encode(
-        self, sequence: Tensor, attention_mask: Optional[Tensor] = None
+        self,
+        sequence: Tensor,
+        attention_mask: Optional[Tensor] = None,
+        return_sequence: bool = False,
     ) -> Tensor:
         """
         Encode the input sequence using a frozen DNABERT and apply attention pooling.
@@ -70,7 +78,9 @@ class FrozenDnabert2Encoder(Encoder, FrozenModel):
         :return: The encoded embeddings.
         :rtype: Tensor
         """
-        with torch.no_grad():
-            outputs = self.encoder(input_ids=sequence, attention_mask=attention_mask)[0]
-        pooled_representation = self.pooling(outputs)
-        return pooled_representation
+        outputs = self.encoder(input_ids=sequence, attention_mask=attention_mask)[0]
+        if return_sequence:
+            return outputs
+        else:
+            pooled_representation = self.pooling(outputs)
+            return pooled_representation

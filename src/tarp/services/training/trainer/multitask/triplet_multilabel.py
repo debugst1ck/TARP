@@ -101,9 +101,9 @@ class JointTripletClassificationTrainer(Trainer):
         )
 
         # Classification logits
-        anchor_logits: Tensor = model.classifier(anchor_embeddings)
-        positive_logits: Tensor = model.classifier(positive_embeddings)
-        negative_logits: Tensor = model.classifier(negative_embeddings)
+        anchor_logits: Tensor = model.classification_head(anchor_embeddings)
+        positive_logits: Tensor = model.classification_head(positive_embeddings)
+        negative_logits: Tensor = model.classification_head(negative_embeddings)
 
         # Classification loss (multi-label)
         anchor_labels = anchor["labels"]
@@ -138,7 +138,7 @@ class JointTripletClassificationTrainer(Trainer):
         anchor_emb = model.encoder.encode(
             anchor["sequence"], anchor.get("attention_mask")
         )
-        logits: Tensor = model.classifier(anchor_emb)
+        logits: Tensor = model.classification_head(anchor_emb)
         loss = self.classification_loss(logits, anchor["labels"])
         return loss, logits.detach().cpu(), anchor["labels"].detach().cpu()
 
