@@ -36,6 +36,7 @@ from tarp.services.preprocessing.augmentation import (
 
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 from tarp.model.backbone.untrained.hyena import HyenaEncoder
+from tarp.model.backbone.untrained.transformer import TransformerEncoder
 from tarp.model.backbone.untrained.lstm import LstmEncoder
 from tarp.model.backbone.pretrained.dnabert2 import (
     FrozenDnabert2Encoder,
@@ -43,7 +44,7 @@ from tarp.model.backbone.pretrained.dnabert2 import (
 )
 from tarp.model.finetuning.classification import ClassificationModel
 
-from tarp.config import LstmConfig, HyenaConfig, Dnabert2Config
+from tarp.config import LstmConfig, HyenaConfig, Dnabert2Config, TransformerConfig
 
 from tarp.services.training.trainer.multitask.triplet_multilabel import (
     JointTripletClassificationTrainer,
@@ -184,13 +185,23 @@ def main() -> None:
 
     # encoder = FrozenDnabert2Encoder(hidden_dimension=Dnabert2Config.hidden_dimension)
 
-    encoder = HyenaEncoder(
+    # encoder = HyenaEncoder(
+    #     vocabulary_size=dataset.tokenizer.vocab_size,
+    #     embedding_dimension=HyenaConfig.embedding_dimension,
+    #     hidden_dimension=HyenaConfig.hidden_dimension,
+    #     padding_id=dataset.tokenizer.pad_token_id,
+    #     number_of_layers=HyenaConfig.number_of_layers,
+    #     dropout=HyenaConfig.dropout,
+    # )
+    
+    encoder = TransformerEncoder(
         vocabulary_size=dataset.tokenizer.vocab_size,
-        embedding_dimension=HyenaConfig.embedding_dimension,
-        hidden_dimension=HyenaConfig.hidden_dimension,
+        embedding_dimension=TransformerConfig.embedding_dimension,
+        hidden_dimension=TransformerConfig.hidden_dimension,
         padding_id=dataset.tokenizer.pad_token_id,
-        number_of_layers=HyenaConfig.number_of_layers,
-        dropout=HyenaConfig.dropout,
+        number_of_layers=TransformerConfig.number_of_layers,
+        number_of_attention_heads=TransformerConfig.number_of_heads,
+        dropout=TransformerConfig.dropout,
     )
 
     classification_model = ClassificationModel(
