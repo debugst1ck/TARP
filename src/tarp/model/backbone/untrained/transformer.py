@@ -5,6 +5,9 @@ import torch.nn.functional as F
 from tarp.model.backbone import Encoder
 from typing import Optional
 
+from tarp.model.layers.pooling.trainable import QueryAttentionPooling
+
+
 class TransformerEncoder(Encoder):
     def __init__(
         self,
@@ -36,8 +39,8 @@ class TransformerEncoder(Encoder):
         )
         self.dropout = nn.Dropout(dropout)
         self.embedding_dimension = embedding_dimension
-        self.output_dimension = embedding_dimension
-    
+        self.pooling = QueryAttentionPooling(hidden_dimension)
+        self.output_dimension = hidden_dimension
 
     def encode(
         self, sequence: Tensor, attention_mask: Optional[Tensor] = None
@@ -48,10 +51,11 @@ class TransformerEncoder(Encoder):
             src_key_padding_mask = attention_mask == 0
         else:
             src_key_padding_mask = None
-        encoded = self.transformer_encoder(embeddings, src_key_padding_mask=src_key_padding_mask)
-        out = self.dropout(encoded)
-        return out
-    
+        encoded = self.transformer_encoder(
+            embeddings, src_key_padding_mask=src_key_padding_mask
+        )
+        return self.pooling(self.dropout(encoded))
+
     @property
     def encoding_size(self) -> int:
         return self.output_dimension
