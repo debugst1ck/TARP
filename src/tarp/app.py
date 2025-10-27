@@ -200,7 +200,7 @@ def main() -> None:
         hidden_dimension=TransformerConfig.hidden_dimension,
         padding_id=dataset.tokenizer.pad_token_id,
         number_of_layers=TransformerConfig.number_of_layers,
-        number_of_attention_heads=TransformerConfig.number_of_heads,
+        number_of_heads=TransformerConfig.number_of_heads,
         dropout=TransformerConfig.dropout,
     )
 
