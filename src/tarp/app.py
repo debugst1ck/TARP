@@ -142,11 +142,11 @@ def main() -> None:
 
     class_counts = label_tensor.sum(dim=0)
     total_counts = label_tensor.size(0)
-    pos_weights = (total_counts - class_counts) / class_counts
-    pos_weights = (pos_weights - pos_weights.min()) / (
-        pos_weights.max() - pos_weights.min()
+    class_weights = (total_counts - class_counts) / class_counts
+    class_weights = (class_weights - class_weights.min()) / (
+        class_weights.max() - class_weights.min()
     )
-    pos_weights = pos_weights * (3.0 - 0.1) + 0.1  # Scale to [0.1, 3.0]
+    class_weights = class_weights * (3.0 - 0.1) + 0.1  # Scale to [0.1, 3.0]
 
     # Display pos weights as a polars DataFrame
     Console.debug(
@@ -154,7 +154,7 @@ def main() -> None:
             pl.DataFrame(
                 {
                     "label": label_columns,
-                    "pos_weight": pos_weights.tolist(),
+                    "class_weights": class_weights.tolist(),
                 }
             )
         )
@@ -239,9 +239,9 @@ def main() -> None:
         train_dataset=Subset(triplet_dataset_amr_non_amr, train_indices),
         valid_dataset=Subset(triplet_dataset_amr_non_amr, valid_indices),
         optimizer=bin_triplet_optimizer,
-        scheduler=CosineAnnealingWarmRestarts(bin_triplet_optimizer, T_0=5, T_mult=2),
+        scheduler=CosineAnnealingWarmRestarts(bin_triplet_optimizer, T_0=3, T_mult=2),
         device=device,
-        epochs=5,
+        epochs=6,
         num_workers=4,
         batch_size=64,
         accumulation_steps=4,
@@ -257,7 +257,7 @@ def main() -> None:
         optimizer=multi_triplet_optimizer,
         scheduler=CosineAnnealingWarmRestarts(multi_triplet_optimizer, T_0=3, T_mult=2),
         device=device,
-        epochs=5,
+        epochs=6,
         num_workers=4,
         batch_size=64,
         accumulation_steps=4,
@@ -279,7 +279,7 @@ def main() -> None:
         valid_dataset=valid_dataset,
         optimizer=optimizer_classification,
         scheduler=CosineAnnealingWarmRestarts(optimizer_classification, T_0=3, T_mult=2),
-        criterion=AsymmetricFocalLoss(gamma_neg=1, gamma_pos=5, class_weights=pos_weights),
+        criterion=AsymmetricFocalLoss(gamma_neg=2, gamma_pos=2, class_weights=class_weights),
         device=device,
         epochs=15,
         num_workers=4,
