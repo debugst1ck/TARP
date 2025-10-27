@@ -5,7 +5,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from typing import Optional
 
-from tarp.cli.logging.colored import ColoredLogger
+from tarp.cli.logging import Console
 from tarp.model.finetuning.classification import ClassificationModel
 from tarp.services.training.callbacks import Callback
 from tarp.services.training.callbacks.monitoring import (
@@ -143,7 +143,7 @@ class JointTripletClassificationTrainer(Trainer):
         return loss, logits.detach().cpu(), anchor["labels"].detach().cpu()
 
     def compute_metrics(self, prediction, expected):
-        ColoredLogger.debug(
+        Console.debug(
             "Validation Classification Report:\n"
             + classification_report(
                 torch.concat(expected, dim=0).numpy(),

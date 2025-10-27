@@ -12,7 +12,7 @@ import plotly.express as px
 import polars as pl
 
 from tarp.services.utilities.seed import establish_random_seed
-from tarp.cli.logging.colored import ColoredLogger
+from tarp.cli.logging import Console
 from tarp.services.tokenizers.pretrained.dnabert import Dnabert2Tokenizer
 from tarp.services.datasource.sequence import (
     TabularSequenceSource,
@@ -26,7 +26,7 @@ from tarp.services.training.trainer.classification.multilabel import (
     MultiLabelClassificationTrainer,
 )
 from tarp.services.evaluation.losses.multilabel import AsymmetricFocalLoss
-from tarp.services.training.trainer.metric.triplet import TripletMetricTrainer
+from tarp.services.training.trainer.metric.triplet import OfflineTripletMetricTrainer
 from tarp.services.preprocessing.augmentation import (
     CombinationTechnique,
     RandomMutation,
@@ -54,14 +54,14 @@ from sklearn.model_selection import train_test_split
 import torch.multiprocessing as mp
 
 def main() -> None:
-    ColoredLogger.info("App started")
+    Console.info("App started")
     
     try:
         mp.set_start_method("spawn", force=True)
-        ColoredLogger.info("Multiprocessing start method set to 'spawn'")
+        Console.info("Multiprocessing start method set to 'spawn'")
         persistent_workers = False
     except RuntimeError:
-        ColoredLogger.warning("Multiprocessing start method was already set, skipping...")
+        Console.warning("Multiprocessing start method was already set, skipping...")
         persistent_workers = True
         pass
 
@@ -69,7 +69,7 @@ def main() -> None:
 
     # Set seed for reproducibility
     SEED = establish_random_seed(69420)  # FuNnY NuMbEr :D
-    ColoredLogger.info(f"Random seed set to {SEED}")
+    Console.info(f"Random seed set to {SEED}")
 
     label_columns = (
         pl.read_csv(Path("temp/data/processed/labels.csv")).to_series().to_list()
@@ -149,7 +149,7 @@ def main() -> None:
     pos_weights = pos_weights * (3.0 - 0.1) + 0.1  # Scale to [0.1, 3.0]
 
     # Display pos weights as a polars DataFrame
-    ColoredLogger.debug(
+    Console.debug(
         str(
             pl.DataFrame(
                 {
@@ -207,21 +207,21 @@ def main() -> None:
 
     # triplet_test_dataset = Subset(triplet_dataset, test_indices)
 
-    ColoredLogger.info(
+    Console.info(
         f"Training {classification_model.encoder.__class__.__name__} model"
     )
 
     # Use torch compile to optimize the model
-    ColoredLogger.info("Compiling model with torch.compile")
+    Console.info("Compiling model with torch.compile")
     torch.compile(classification_model, mode="reduce-overhead")
     torch.compile(triplet_model, mode="reduce-overhead")
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-        ColoredLogger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        Console.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
         device = torch.device("cuda")
     else:
-        ColoredLogger.warning("Using CPU for training, this may be slow")
+        Console.warning("Using CPU for training, this may be slow")
         device = torch.device("cpu")
 
     encoder_params = []
@@ -233,8 +233,8 @@ def main() -> None:
             head_params.append(p)
 
     bin_triplet_optimizer = AdamW(triplet_model.parameters(), lr=1e-4, weight_decay=1e-2)
-    ColoredLogger.info("Starting triplet model training on AMR vs non-AMR task")
-    TripletMetricTrainer(
+    Console.info("Starting triplet model training on AMR vs non-AMR task")
+    OfflineTripletMetricTrainer(
         model=triplet_model,
         train_dataset=Subset(triplet_dataset_amr_non_amr, train_indices),
         valid_dataset=Subset(triplet_dataset_amr_non_amr, valid_indices),
@@ -248,16 +248,16 @@ def main() -> None:
         persistent_workers=persistent_workers,
     ).fit()
 
-    ColoredLogger.info("Starting triplet model training on full multi-label task")
+    Console.info("Starting triplet model training on full multi-label task")
     multi_triplet_optimizer = AdamW(triplet_model.parameters(), lr=1e-4, weight_decay=1e-3)
-    TripletMetricTrainer(
+    OfflineTripletMetricTrainer(
         model=triplet_model,
         train_dataset=triplet_train_dataset,
         valid_dataset=triplet_valid_dataset,
         optimizer=multi_triplet_optimizer,
-        scheduler=CosineAnnealingWarmRestarts(multi_triplet_optimizer, T_0=5, T_mult=2),
+        scheduler=CosineAnnealingWarmRestarts(multi_triplet_optimizer, T_0=3, T_mult=2),
         device=device,
-        epochs=15,
+        epochs=5,
         num_workers=4,
         batch_size=64,
         accumulation_steps=4,
@@ -266,7 +266,7 @@ def main() -> None:
 
     # Load the trained weights into the classification model's encoder
     classification_model.encoder.load_state_dict(triplet_model.encoder.state_dict())
-    ColoredLogger.info("Starting classification model training")
+    Console.info("Starting classification model training")
     optimizer_classification = AdamW(
         [
             {"params": encoder_params, "lr": 1e-4, "weight_decay": 1e-2},
@@ -278,8 +278,8 @@ def main() -> None:
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,
         optimizer=optimizer_classification,
-        scheduler=ReduceLROnPlateau(optimizer_classification, mode="min", patience=3),
-        criterion=AsymmetricFocalLoss(gamma_neg=1, gamma_pos=3, class_weights=pos_weights),
+        scheduler=CosineAnnealingWarmRestarts(optimizer_classification, T_0=3, T_mult=2),
+        criterion=AsymmetricFocalLoss(gamma_neg=1, gamma_pos=5, class_weights=pos_weights),
         device=device,
         epochs=15,
         num_workers=4,
@@ -295,7 +295,7 @@ def main() -> None:
         f"temp/checkpoints/{classification_model.encoder.__class__.__name__}_{run_id}.pt",
     )
 
-    ColoredLogger.info("Training complete")
+    Console.info("Training complete")
 
     # Visualize training history
     history = trainer.context.state.history  # List of dicts

@@ -4,7 +4,7 @@ from tarp.services.training.callbacks import Callback
 from tarp.services.evaluation import Extremum
 from tarp.services.training.context import TrainerContext
 
-from tarp.cli.logging.colored import ColoredLogger
+from tarp.cli.logging import Console
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -44,11 +44,11 @@ class EarlyStopping(Callback):
         else:
             self.counter += 1
             if self.counter >= self.patience:
-                ColoredLogger.info("Early stopping triggered.")
+                Console.info("Early stopping triggered.")
                 context.request_stop()
 
     def on_training_start(self, context: TrainerContext) -> None:
-        ColoredLogger.debug(f"Monitoring {self.monitor_metric} for early stopping.")
+        Console.debug(f"Monitoring {self.monitor_metric} for early stopping.")
 
 
 class LearningRateScheduler(Callback):
@@ -69,13 +69,18 @@ class LearningRateScheduler(Callback):
             if current_value is not None:
                 context.scheduler.step(current_value)
                 if context.scheduler.num_bad_epochs == context.scheduler.patience:
-                    ColoredLogger.info(
+                    Console.info(
                         f"Learning rate reduced to {context.scheduler._last_lr}."
                     )
         else:
             context.scheduler.step()
             
     def on_training_start(self, context, **kwargs):
-        ColoredLogger.debug(
-            f"Learning rate scheduler will monitor {self.monitor_metric}."
-        )
+        if context.scheduler is None:
+            return
+        if isinstance(context.scheduler, ReduceLROnPlateau):
+            Console.debug(
+                f"Learning rate scheduler will monitor {self.monitor_metric}."
+            )
+        else:
+            Console.debug("Learning rate scheduler will step every epoch.")

@@ -14,7 +14,7 @@ from tarp.services.training.loops.validation import ValidationLoop
 from tarp.services.training.loops.training import TrainingLoop
 from tarp.services.training.callbacks import Callback
 
-from tarp.cli.logging.colored import ColoredLogger
+from tarp.cli.logging import Console
 from tarp.services.training.callbacks.monitoring import (
     EarlyStopping,
     LearningRateScheduler,
@@ -81,7 +81,7 @@ class Trainer(ABC):
             batch_size=batch_size,
             shuffle=True,
             num_workers=num_workers,
-            pin_memory=True if persistent_workers==True else False,
+            pin_memory=True if persistent_workers == True else False,
             persistent_workers=persistent_workers,
         )
         self.validation_dataloader = DataLoader(
@@ -89,10 +89,10 @@ class Trainer(ABC):
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
-            pin_memory=True if persistent_workers==True else False,
+            pin_memory=True if persistent_workers == True else False,
             persistent_workers=persistent_workers,
         )
-        
+
         self.callbacks = callbacks
 
         self.training_loop = TrainingLoop(
@@ -169,24 +169,24 @@ class Trainer(ABC):
     def fit(self) -> None:
         self._execute_callbacks(Callback.on_training_start.__name__)
         for epoch in range(self.context.epochs):
+            Console.info(f"Starting epoch {epoch + 1}/{self.context.epochs} for {self.__class__.__name__}")
+
             self._execute_callbacks(Callback.on_epoch_start.__name__)
 
             # Training phase
-            training_metrics = self.training_loop.run(
-                epoch, self.train_dataloader
-            )
-            
+            training_metrics = self.training_loop.run(epoch, self.train_dataloader)
+
             self.context.record_current_history(training_metrics)
-            
+
             # Validation phase
             validation_metrics = self.validation_loop.run(
                 epoch, self.validation_dataloader
             )
-            
+
             self.context.record_current_history(validation_metrics)
-            
+
             for key, value in self.context.current_metrics.items():
-                ColoredLogger.debug(f"{key}: {value:.4f}")
+                Console.debug(f"{key}: {value:.4f}")
 
             self._execute_callbacks(Callback.on_epoch_end.__name__)
 

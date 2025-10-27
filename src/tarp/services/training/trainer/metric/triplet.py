@@ -1,19 +1,20 @@
 import torch
 from torch import nn, Tensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import ReduceLROnPlateau, LRScheduler
+from torch.optim.lr_scheduler import LRScheduler
 
-from tqdm import tqdm
 from typing import Optional
 
+from tarp.model.backbone import Encoder
 from tarp.services.training.trainer import Trainer
-from tarp.services.evaluation import Extremum
-from tarp.cli.logging.colored import ColoredLogger
 
 from tarp.model.finetuning.metric.triplet import TripletMetricModel
 
-class TripletMetricTrainer(Trainer):
+import torch.nn.functional as F
+
+
+class OfflineTripletMetricTrainer(Trainer):
     def __init__(
         self,
         model: TripletMetricModel,
@@ -60,7 +61,9 @@ class TripletMetricTrainer(Trainer):
             mask = mask.to(self.context.device)
         return sequence, mask
 
-    def training_step(self, batch: dict[str, Tensor]) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
+    def training_step(
+        self, batch: dict[str, Tensor]
+    ) -> tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
         anchor, anchor_mask = self._move_item_to_device(batch["anchor"])
         positive, positive_mask = self._move_item_to_device(batch["positive"])
         negative, negative_mask = self._move_item_to_device(batch["negative"])
@@ -112,28 +115,30 @@ class TripletMetricTrainer(Trainer):
             ),
             None,
         )
-        
+
     def compute_metrics(
         self, prediction: list[Tensor], expected: list[Tensor]
     ) -> dict[str, float]:
         # Prediction is a list of tuples (anchor, positive, negative)
-        
+
         anchors, positives, negatives = zip(*prediction)
-        
+
         anchors = torch.cat(anchors, dim=0)
         positives = torch.cat(positives, dim=0)
         negatives = torch.cat(negatives, dim=0)
-        
+
         # Compute distances
         positive_distances = torch.norm(anchors - positives, dim=1)
         negative_distances = torch.norm(anchors - negatives, dim=1)
-        
+
         # Compute metrics
         margin = self.criterion.margin
-        
+
         # Accuracy: fraction of triplets where positive is closer than negative by at least margin
-        accuracy = ((negative_distances - positive_distances) > margin).float().mean().item()
-        
+        accuracy = (
+            ((negative_distances - positive_distances) > margin).float().mean().item()
+        )
+
         return {
             "triplet_accuracy": accuracy,
             "mean_positive_distance": positive_distances.mean().item(),

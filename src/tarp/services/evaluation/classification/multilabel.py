@@ -4,7 +4,7 @@ import torch
 import sklearn.metrics
 from typing import Union
 
-from tarp.cli.logging.colored import ColoredLogger
+from tarp.cli.logging import Console
 
 
 class MultiLabelMetrics:
@@ -87,7 +87,7 @@ class MultiLabelMetrics:
 
     def _roc_auc(self, logits: Tensor, targets: Tensor) -> Optional[float]:
         if not self.logits:
-            ColoredLogger.warning(
+            Console.warning(
                 "ROC AUC metric expects logits, but got probabilities."
             )
             return float("nan")
@@ -102,12 +102,12 @@ class MultiLabelMetrics:
 
         # If no valid classes, return NaN
         if not valid_classes:
-            ColoredLogger.warning("No valid classes for ROC AUC computation.")
+            Console.warning("No valid classes for ROC AUC computation.")
             return float("nan")
 
         if len(valid_classes) < y_true.shape[1]:
             skipped = y_true.shape[1] - len(valid_classes)
-            ColoredLogger.warning(
+            Console.warning(
                 f"Skipping {skipped} invalid classes (all-zeros or all-ones) for ROC AUC."
             )
 
@@ -123,7 +123,7 @@ class MultiLabelMetrics:
         
     def _label_ranking_average_precision(self, logits: Tensor, targets: Tensor) -> float:
         if not self.logits:
-            ColoredLogger.warning(
+            Console.warning(
                 "Label Ranking Average Precision metric expects logits, but got probabilities."
             )
             return float("nan")

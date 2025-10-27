@@ -8,7 +8,7 @@ from Bio.Seq import Seq
 import torch
 from torch import Tensor
 
-from tarp.cli.logging.colored import ColoredLogger
+from tarp.cli.logging import Console
 
 # Mru cache could be used for caching sequences if needed
 
@@ -359,7 +359,7 @@ class FastaSliceSource(SequenceDataSource):
                 row[self.sequence_column] = str(sequence)
                 results.append(row)
         if not len(results) == len(indices):
-            ColoredLogger.warning(
+            Console.warning(
                 f"Batch retrieval returned {len(results)} results, "
                 f"but {len(indices)} were requested."
             )
