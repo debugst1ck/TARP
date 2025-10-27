@@ -39,8 +39,8 @@ class TransformerEncoder(Encoder):
         )
         self.dropout = nn.Dropout(dropout)
         self.embedding_dimension = embedding_dimension
-        self.pooling = QueryAttentionPooling(hidden_dimension)
-        self.output_dimension = hidden_dimension
+        self.pooling = QueryAttentionPooling(embedding_dimension)
+        self.output_dimension = embedding_dimension
 
     def encode(
         self, sequence: Tensor, attention_mask: Optional[Tensor] = None
