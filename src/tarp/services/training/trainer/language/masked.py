@@ -84,43 +84,37 @@ class MaskedLanguageModelTrainer(Trainer):
     def compute_metrics(
         self, prediction: list[Tensor], expected: list[Tensor], topk: int = 5
     ) -> dict[str, float]:
-        logits = torch.cat(prediction)  # [total_tokens, vocab_size]
-        truth = torch.cat(expected)  # [total_tokens]
+        correct = 0
+        total = 0
+        topk_correct = 0
+        # How can we not concatenate here?
+        for logits, truth in zip(prediction, expected):
+            # mask invalid tokens
+            mask = truth != -100
+            if mask.sum() == 0:
+                continue
 
-        mask = truth != -100
-        if mask.sum() == 0:
-            return {
-                "masked_accuracy": 0.0,
-                f"top{topk}_accuracy": 0.0,
-                "masked_perplexity": float("inf"),
-            }
+            # masked accuracy
+            preds = logits.argmax(dim=-1)
+            correct += (preds[mask] == truth[mask]).sum().item()
+            total += mask.sum().item()
 
-        predictions = logits.argmax(dim=-1)
-        correct = (predictions[mask] == truth[mask]).sum().item()
-        total = mask.sum().item()
-        accuracy = correct / total
+            if topk > 1:
+                # get top-k indices along vocab dimension
+                topk_preds = logits.topk(topk, dim=-1).indices  # [batch, seq_len, topk]
 
-        # Top-k accuracy
-        topk_predictions = torch.topk(
-            logits, k=topk, dim=-1
-        ).indices  # [total_tokens, topk]
-        topk_correct = (
-            topk_predictions[mask]
-            .eq(truth[mask].unsqueeze(-1))
-            .any(dim=-1)
-            .sum()
-            .item()
-        )
-        topk_accuracy = topk_correct / total
+                # select masked positions
+                topk_preds_masked = topk_preds[mask]  # [valid_tokens, topk]
+                truth_masked = truth[mask].unsqueeze(-1)  # [valid_tokens, 1]
 
-        # Perplexity
-        log_probabilities = torch.nn.functional.log_softmax(logits, dim=-1)
-        masked_log_probabilities = log_probabilities[range(truth.size(0)), truth][mask]
-        masked_loss = -masked_log_probabilities.mean()
-        masked_perplexity = torch.exp(masked_loss).item()
+                # check if truth is in top-k predictions
+                topk_correct += (
+                    topk_preds_masked.eq(truth_masked).any(dim=-1).sum().item()
+                )
 
-        return {
-            "masked_accuracy": accuracy,
-            f"top{topk}_accuracy": topk_accuracy,
-            "masked_perplexity": masked_perplexity,
-        }
+        accuracy = correct / total if total > 0 else 0.0
+        metrics = {"masked_accuracy": accuracy}
+        if topk > 1:
+            metrics[f"top_{topk}_accuracy"] = topk_correct / total if total > 0 else 0.0
+
+        return metrics

@@ -99,33 +99,6 @@ def main() -> None:
         ),
     )
 
-    dataset_amr_non_amr = MultiLabelClassificationDataset(
-        (
-            TabularSequenceSource(
-                source=Path("temp/data/processed/card_amr_binary.parquet")
-            )
-            + FastaSliceSource(
-                directory=Path("temp/data/external/sequences"),
-                metadata=Path("temp/data/processed/non_amr_genes_10000.parquet"),
-                key_column="genomic_nucleotide_accession.version",
-                start_column="start_position_on_the_genomic_accession",
-                end_column="end_position_on_the_genomic_accession",
-                orientation_column="orientation",
-            )
-        ),
-        Dnabert2Tokenizer(),
-        sequence_column="sequence",
-        label_columns=["amr", "non_amr"],
-        maximum_sequence_length=512,
-        augmentation=CombinationTechnique(
-            [
-                RandomMutation(),
-                InsertionDeletion(),
-                ReverseComplement(0.5),
-            ]
-        ),
-    )
-
     masked_language_dataset = MaskedLanguageModelDataset(
         data_source=(
             TabularSequenceSource(source=Path("temp/data/processed/card_amr.parquet"))
@@ -143,12 +116,7 @@ def main() -> None:
         maximum_sequence_length=512,
         masking_probability=0.15,
     )
-
-    triplet_dataset_amr_non_amr = MultiLabelOfflineTripletDataset(
-        base_dataset=dataset_amr_non_amr,
-        label_cache=Path("temp/data/cache/labels_cache_amr_non_amr.parquet"),
-    )
-
+    
     triplet_dataset = MultiLabelOfflineTripletDataset(
         base_dataset=multi_label_classification_dataset,
         label_cache=Path("temp/data/cache/labels_cache.parquet"),
