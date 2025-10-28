@@ -3,6 +3,7 @@ from torch import nn, Tensor
 import torch.nn.functional as F
 
 from typing import Optional, Union
+from tarp.services.evaluation import Reduction
 
 
 class AsymmetricFocalLoss(nn.Module):
@@ -13,7 +14,7 @@ class AsymmetricFocalLoss(nn.Module):
         clip: float = 0.05,
         epsilon: float = 1e-8,
         disable_torch_grad_focal_loss: bool = True,
-        reduction: str = "mean",  # add reduction to mimic BCE
+        reduction: Reduction = Reduction.MEAN,
         class_weights: Optional[Tensor] = None,
     ):
         """
@@ -44,7 +45,7 @@ class AsymmetricFocalLoss(nn.Module):
         """
         # Use 'probs' for the sigmoid output to indicate they are probabilities
         probs = torch.sigmoid(logits)
-        
+
         # Clearly distinguish positive and negative probabilities
         probs_pos = probs
         probs_neg: Tensor = 1 - probs
@@ -57,8 +58,10 @@ class AsymmetricFocalLoss(nn.Module):
         # Basic CE calculation
         # Use 'log_likelihood' to describe the loss components
         log_likelihood_pos = targets * torch.log(probs_pos.clamp(min=self.epsilon))
-        log_likelihood_neg: Tensor = (1 - targets) * torch.log(probs_neg.clamp(min=self.epsilon))
-        
+        log_likelihood_neg: Tensor = (1 - targets) * torch.log(
+            probs_neg.clamp(min=self.epsilon)
+        )
+
         # Combine the positive and negative parts into a single loss
         loss = log_likelihood_pos + log_likelihood_neg
 
@@ -66,21 +69,23 @@ class AsymmetricFocalLoss(nn.Module):
         if self.gamma_neg > 0 or self.gamma_pos > 0:
             if self.disable_torch_grad_focal_loss:
                 torch.set_grad_enabled(False)
-                
+
             # Use 'pt' for probability-target products, a common notation
             pt_pos = probs_pos * targets
             pt_neg = probs_neg * (1 - targets)
             pt = pt_pos + pt_neg
-            
+
             # 'gamma_for_each_class' is more descriptive than 'one_sided_gamma'
-            gamma_for_each_class = self.gamma_pos * targets + self.gamma_neg * (1 - targets)
-            
+            gamma_for_each_class = self.gamma_pos * targets + self.gamma_neg * (
+                1 - targets
+            )
+
             # 'focusing_factor' is a better name for the weight
             focusing_factor = torch.pow(1 - pt, gamma_for_each_class)
-            
+
             if self.disable_torch_grad_focal_loss:
                 torch.set_grad_enabled(True)
-                
+
             loss *= focusing_factor
 
         # Apply class weights
@@ -89,27 +94,27 @@ class AsymmetricFocalLoss(nn.Module):
 
         # Apply reduction
         loss = -loss
-        if self.reduction == "mean":
-            return loss.mean()
-        elif self.reduction == "sum":
-            return loss.sum()
-        else:  # 'none'
-            return loss
-
+        match self.reduction:
+            case Reduction.MEAN:
+                return loss.mean()
+            case Reduction.SUM:
+                return loss.sum()
+            case _:
+                return loss
 
 class FocalLoss(nn.Module):
     def __init__(
         self,
         gamma: float = 2.0,
         alpha: Optional[Union[float, torch.Tensor]] = None,
-        reduction: str = "mean",
+        reduction: Reduction = Reduction.MEAN,
         logits: bool = True,
     ):
         """
         Focal Loss for binary or multi-label classification.
 
         :param gamma: focusing parameter that reduces the loss contribution from easy examples
-        :param alpha: balancing factor. 
+        :param alpha: balancing factor.
                       - If float in [0,1], scalar positive/negative weighting.
                       - If Tensor of shape [num_classes], per-class weights.
         :param reduction: 'none' | 'mean' | 'sum'
@@ -123,7 +128,9 @@ class FocalLoss(nn.Module):
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         if self.logits:
-            bce_loss = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+            bce_loss = F.binary_cross_entropy_with_logits(
+                logits, targets, reduction="none"
+            )
             probs = torch.sigmoid(logits)
         else:
             bce_loss = F.binary_cross_entropy(logits, targets, reduction="none")
@@ -138,8 +145,12 @@ class FocalLoss(nn.Module):
         if self.alpha is not None:
             if isinstance(self.alpha, torch.Tensor):
                 # Make sure alpha is on the same device
-                alpha_factor = self.alpha.to(logits.device).unsqueeze(0)  # [1, num_classes]
-                alpha_factor = alpha_factor * targets + (1 - alpha_factor) * (1 - targets)
+                alpha_factor = self.alpha.to(logits.device).unsqueeze(
+                    0
+                )  # [1, num_classes]
+                alpha_factor = alpha_factor * targets + (1 - alpha_factor) * (
+                    1 - targets
+                )
             else:
                 # Scalar case
                 alpha_factor = self.alpha * targets + (1 - self.alpha) * (1 - targets)
@@ -147,9 +158,10 @@ class FocalLoss(nn.Module):
             focal_loss = alpha_factor * focal_loss
 
         # Reduction
-        if self.reduction == "mean":
-            return focal_loss.mean()
-        elif self.reduction == "sum":
-            return focal_loss.sum()
-        else:
-            return focal_loss
+        match self.reduction:
+            case Reduction.MEAN:
+                return focal_loss.mean()
+            case Reduction.SUM:
+                return focal_loss.sum()
+            case _:
+                return focal_loss

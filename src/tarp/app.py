@@ -11,6 +11,7 @@ from torch.utils.data import Subset
 import plotly.express as px
 import polars as pl
 
+from tarp.model.backbone.untrained.hyena import HyenaEncoder
 from tarp.model.backbone.untrained.transformer import TransformerEncoder
 
 from tarp.model.finetuning.language import LanguageModel
@@ -42,7 +43,7 @@ from tarp.services.preprocessing.augmentation import (
 
 from tarp.services.datasets.language.masked import MaskedLanguageModelDataset
 
-from tarp.config import TransformerConfig
+from tarp.config import HyenaConfig, TransformerConfig
 
 from tarp.services.training.trainer.language.masked import MaskedLanguageModelTrainer
 
@@ -131,7 +132,7 @@ def main() -> None:
     class_weights = (class_weights - class_weights.min()) / (
         class_weights.max() - class_weights.min()
     )
-    class_weights = class_weights * (3.0 - 0.1) + 0.1  # Scale to [0.1, 3.0]
+    class_weights = class_weights * (10.0 - 0.1) + 0.1  # Scale to [0.1, 10.0]
 
     # Display pos weights as a polars DataFrame
     Console.debug(
@@ -154,14 +155,24 @@ def main() -> None:
         temp_indices, test_size=0.5, random_state=SEED
     )
 
-    encoder = TransformerEncoder(
+    # encoder = TransformerEncoder(
+    #     vocabulary_size=multi_label_classification_dataset.tokenizer.vocab_size,
+    #     embedding_dimension=TransformerConfig.embedding_dimension,
+    #     hidden_dimension=TransformerConfig.hidden_dimension,
+    #     padding_id=multi_label_classification_dataset.tokenizer.pad_token_id,
+    #     number_of_layers=TransformerConfig.number_of_layers,
+    #     number_of_heads=TransformerConfig.number_of_heads,
+    #     dropout=TransformerConfig.dropout,
+    # )
+    
+    
+    encoder = HyenaEncoder(
         vocabulary_size=multi_label_classification_dataset.tokenizer.vocab_size,
-        embedding_dimension=TransformerConfig.embedding_dimension,
-        hidden_dimension=TransformerConfig.hidden_dimension,
+        embedding_dimension=HyenaConfig.embedding_dimension,
+        hidden_dimension=HyenaConfig.hidden_dimension,
         padding_id=multi_label_classification_dataset.tokenizer.pad_token_id,
-        number_of_layers=TransformerConfig.number_of_layers,
-        number_of_heads=TransformerConfig.number_of_heads,
-        dropout=TransformerConfig.dropout,
+        number_of_layers=HyenaConfig.number_of_layers,
+        dropout=HyenaConfig.dropout,
     )
 
     classification_model = ClassificationModel(
