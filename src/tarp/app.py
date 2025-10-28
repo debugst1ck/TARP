@@ -253,7 +253,7 @@ def main() -> None:
             optimizer_language, T_0=5, T_mult=2
         ),
         device=device,
-        epochs=15,
+        epochs=20,
         num_workers=4,
         batch_size=64,
         accumulation_steps=4,

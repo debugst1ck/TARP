@@ -82,18 +82,45 @@ class MaskedLanguageModelTrainer(Trainer):
         return loss, logits.detach().cpu(), truth.detach().cpu()
 
     def compute_metrics(
-        self, prediction: list[Tensor], expected: list[Tensor]
+        self, prediction: list[Tensor], expected: list[Tensor], topk: int = 5
     ) -> dict[str, float]:
-        # Optional: compute masked accuracy
-        logits = torch.cat(prediction)
-        truth = torch.cat(expected)
+        logits = torch.cat(prediction)  # [total_tokens, vocab_size]
+        truth = torch.cat(expected)  # [total_tokens]
 
         mask = truth != -100
         if mask.sum() == 0:
-            return {"masked_accuracy": 0.0}
+            return {
+                "masked_accuracy": 0.0,
+                f"top{topk}_accuracy": 0.0,
+                "masked_perplexity": float("inf"),
+            }
 
         predictions = logits.argmax(dim=-1)
         correct = (predictions[mask] == truth[mask]).sum().item()
         total = mask.sum().item()
         accuracy = correct / total
-        return {"masked_accuracy": accuracy}
+
+        # Top-k accuracy
+        topk_predictions = torch.topk(
+            logits, k=topk, dim=-1
+        ).indices  # [total_tokens, topk]
+        topk_correct = (
+            topk_predictions[mask]
+            .eq(truth[mask].unsqueeze(-1))
+            .any(dim=-1)
+            .sum()
+            .item()
+        )
+        topk_accuracy = topk_correct / total
+
+        # Perplexity
+        log_probabilities = torch.nn.functional.log_softmax(logits, dim=-1)
+        masked_log_probabilities = log_probabilities[range(truth.size(0)), truth][mask]
+        masked_loss = -masked_log_probabilities.mean()
+        masked_perplexity = torch.exp(masked_loss).item()
+
+        return {
+            "masked_accuracy": accuracy,
+            f"top{topk}_accuracy": topk_accuracy,
+            "masked_perplexity": masked_perplexity,
+        }
