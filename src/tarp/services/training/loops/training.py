@@ -33,7 +33,7 @@ class TrainingLoop(Loop):
             colour="green",
         )
         for step, batch in enumerate(loop):
-            self._execute_callbacks(Callback.on_training_batch_start.__name__)
+            self._execute_callbacks(Callback.on_train_batch_start.__name__)
             # Gradient accumulation step
             accumulation_stop = (step + 1) % self.context.accumulation_steps == 0
             is_last_step = (step + 1) == len(dataloader)
@@ -41,7 +41,7 @@ class TrainingLoop(Loop):
                 batch, optimize=accumulation_stop or is_last_step
             )
             total_loss += loss.item()
-            self._execute_callbacks(Callback.on_training_batch_end.__name__)
+            self._execute_callbacks(Callback.on_train_batch_end.__name__)
             loop.set_postfix(loss=f"{loss.item():.4f}")
 
         average_loss = total_loss / len(dataloader)

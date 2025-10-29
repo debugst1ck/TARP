@@ -155,25 +155,25 @@ def main() -> None:
         temp_indices, test_size=0.5, random_state=SEED
     )
 
-    # encoder = TransformerEncoder(
-    #     vocabulary_size=multi_label_classification_dataset.tokenizer.vocab_size,
-    #     embedding_dimension=TransformerConfig.embedding_dimension,
-    #     hidden_dimension=TransformerConfig.hidden_dimension,
-    #     padding_id=multi_label_classification_dataset.tokenizer.pad_token_id,
-    #     number_of_layers=TransformerConfig.number_of_layers,
-    #     number_of_heads=TransformerConfig.number_of_heads,
-    #     dropout=TransformerConfig.dropout,
-    # )
-    
-    
-    encoder = HyenaEncoder(
+    encoder = TransformerEncoder(
         vocabulary_size=multi_label_classification_dataset.tokenizer.vocab_size,
-        embedding_dimension=HyenaConfig.embedding_dimension,
-        hidden_dimension=HyenaConfig.hidden_dimension,
+        embedding_dimension=TransformerConfig.embedding_dimension,
+        hidden_dimension=TransformerConfig.hidden_dimension,
         padding_id=multi_label_classification_dataset.tokenizer.pad_token_id,
-        number_of_layers=HyenaConfig.number_of_layers,
-        dropout=HyenaConfig.dropout,
+        number_of_layers=TransformerConfig.number_of_layers,
+        number_of_heads=TransformerConfig.number_of_heads,
+        dropout=TransformerConfig.dropout,
     )
+    
+    
+    # encoder = HyenaEncoder(
+    #     vocabulary_size=multi_label_classification_dataset.tokenizer.vocab_size,
+    #     embedding_dimension=HyenaConfig.embedding_dimension,
+    #     hidden_dimension=HyenaConfig.hidden_dimension,
+    #     padding_id=multi_label_classification_dataset.tokenizer.pad_token_id,
+    #     number_of_layers=HyenaConfig.number_of_layers,
+    #     dropout=HyenaConfig.dropout,
+    # )
 
     classification_model = ClassificationModel(
         encoder=encoder,
@@ -223,6 +223,7 @@ def main() -> None:
     )
     
     Console.info("Starting masked language model training")
+    Console.debug(f"Vocabulary size: {multi_label_classification_dataset.tokenizer.vocab_size}")
     MaskedLanguageModelTrainer(
         model=language_model,
         train_dataset=Subset(masked_language_dataset, train_indices),
@@ -283,7 +284,7 @@ def main() -> None:
             optimizer_classification, T_0=5, T_mult=2
         ),
         criterion=AsymmetricFocalLoss(
-            gamma_neg=2, gamma_pos=2, class_weights=class_weights
+            gamma_neg=1, gamma_pos=3, class_weights=class_weights
         ),
         device=device,
         epochs=15,
